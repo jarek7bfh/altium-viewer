@@ -1,5 +1,5 @@
 // Altium Viewer service worker: offline app shell + Android share target
-const VERSION = 'av-v8b';
+const VERSION = 'av-v9';
 const SHELL = [
   './', './index.html', './app.css', './manifest.webmanifest', './vendor/cfb.min.js',
   './js/app.js', './js/util.js', './js/schparse.js', './js/pcbparse.js', './js/netlink.js',

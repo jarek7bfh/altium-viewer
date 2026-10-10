@@ -28,6 +28,7 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5M6.5 9.5V19h11V9.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 6V3M12 6V3M15 6V3M9 21v-3M12 21v-3M15 21v-3M6 9H3M6 12H3M6 15H3M21 9h-3M21 12h-3M21 15h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   <symbol id="i-net" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="6" r="2.2" fill="currentColor"/><circle cx="19" cy="18" r="2.2" fill="currentColor"/><path d="M7 12h5V6h5M12 12v6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
@@ -45,7 +46,6 @@
       <button id="add" class="btn big"><svg><use href="#i-plus"/></svg>Wybierz pliki</button>
     </div>
     <p class="hint" id="hint-dir"><b>Otwórz folder</b> z projektem, np. w Nextcloudzie. Zobaczysz w nim tylko pliki .PrjPcb, .SchDoc i .PcbDoc. Po wybraniu projektu aplikacja wczyta tylko schematy i płytki wymienione w pliku .PrjPcb. Pojedynczy schemat lub płytkę otworzysz do podglądu bez zapisywania.</p>
-    <label class="opt"><input type="checkbox" id="opt-3d"><span>Zapisuj modele 3D (STEP) – zwykle 1–5 MB więcej na projekt</span></label>
     <p class="hint hidden" id="hint-files">Wybierz plik <b>.PrjPcb</b> razem z jego schematami i płytką. Aby zaznaczyć kilka plików, <b>przytrzymaj</b> pierwszy z nich w oknie wyboru. Pojedynczy schemat lub płytkę otworzysz do podglądu bez zapisywania.</p>
     <div id="plist" class="plist"></div>
     <div id="empty" class="empty hidden">
@@ -72,7 +72,8 @@
 <!-- ===== Viewer ===== -->
 <div id="viewer" class="screen hidden">
   <header class="vbar">
-    <button id="v-back" class="ib" aria-label="Projekty"><svg><use href="#i-back"/></svg></button>
+    <button id="v-back" class="ib" aria-label="Wróć"><svg><use href="#i-back"/></svg></button>
+    <button id="v-home" class="ib hidden" aria-label="Lista projektów" title="Lista projektów"><svg><use href="#i-home"/></svg></button>
     <div class="vtitle">
       <span id="v-name"></span>
       <select id="v-pcb" class="hidden" aria-label="Płytka"></select>
@@ -98,7 +99,7 @@
     </section>
     <section class="pane dark" id="p-pcb">
       <div class="phost"></div>
-      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Top</span></button><button id="b3d" class="chip"><svg><use href="#i-cube"/></svg><span>3D</span></button><button id="bstep" class="chip hidden"><span>Modele STEP</span></button></div>
+      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Top</span></button><button id="b3d" class="chip"><svg><use href="#i-cube"/></svg><span>3D</span></button></div>
       <div class="v3dhost"></div>
       <div class="v3dmsg hidden"><div class="spin"></div><span></span></div>
       <div class="ptools tr"><button class="fab" data-fit="pcb" aria-label="Dopasuj"><svg><use href="#i-fit"/></svg></button></div>

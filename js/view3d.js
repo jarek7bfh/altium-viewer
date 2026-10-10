@@ -98,7 +98,7 @@ export class View3D {
   async build(pcb, groups, meshes, useStep) {
     this.clear();
     this.pcb = pcb;
-    const T = pcb.board.thickness * MM;
+    const T = 1.6; // viewer: standard 1.6 mm board (Altium stacks are often left at default values)
     this.T = T;
     const ol = outlinePoints(pcb.outline);
     let bx1 = Infinity, by1 = Infinity, bx2 = -Infinity, by2 = -Infinity;
