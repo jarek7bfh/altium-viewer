@@ -67,9 +67,10 @@ export function parsePrj(text) {
     if (/^Document\d+$/i.test(sec)) {
       const m = /^DocumentPath=(.*)$/i.exec(line);
       if (m) {
-        const name = base(m[1].trim());
+        const path = m[1].trim();
+        const name = base(path);
         const k = kindOf(name);
-        if (k === 'sch' || k === 'pcb') docs.push({ name, kind: k });
+        if (k === 'sch' || k === 'pcb') docs.push({ name, kind: k, path });
       }
     }
   }
@@ -140,7 +141,7 @@ export async function importFiles(files, target, existing) {
   const isUpdate = !!proj;
   if (!proj) {
     const nm = prjFile ? prjFile.name.replace(/\.prjpcb$/i, '') : (docs[0]?.name || 'Projekt').replace(/\.(schdoc|pcbdoc)$/i, '');
-    proj = { id: uuid(), name: nm, prjName: prjFile ? prjFile.name : null, docs: null, files: {}, prjText: null, created: Date.now(), updated: Date.now() };
+    proj = { id: uuid(), kind: prjFile ? 'project' : 'single', name: nm, prjName: prjFile ? prjFile.name : null, docs: null, files: {}, prjText: null, created: Date.now(), updated: Date.now() };
   } else {
     proj = { ...proj, files: { ...proj.files } };
   }
@@ -173,9 +174,100 @@ export async function importFiles(files, target, existing) {
   // drop stored files no longer referenced by project
   if (allowed) for (const k of Object.keys(proj.files)) if (!allowed.has(k)) delete proj.files[k];
   proj.updated = Date.now();
-  return { proj, imported, skipped, errors, isUpdate, hasContent: Object.keys(proj.files).length > 0 };
+  return { proj, imported, skipped, errors, isUpdate, prjOnly: !!prjFile && !chosen.size, picked: [...files].map((f) => f.name), hasContent: Object.keys(proj.files).length > 0 };
 }
+
+async function readDoc(f, kind) {
+  const { streams, info } = extractStreams(await f.arrayBuffer(), kind);
+  return { name: f.name, kind, origSize: f.size, lastModified: f.lastModified || Date.now(), streams, info, imported: Date.now() };
+}
+
+// ---------------- folder browsing ----------------
+const isTemp = (name) => /^~\$|^\.~|\.(bak|tmp|\$\$\$)$|^~/i.test(name);
+const normPath = (p) => {
+  const out = [];
+  for (const seg of p.split(/[\\/]+/)) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') out.pop(); else out.push(seg.toLowerCase());
+  }
+  return out.join('/');
+};
+
+/** Scan files from a folder pick: only .PrjPcb/.SchDoc/.PcbDoc outside history/outputs folders. */
+export function scanFolder(fileList) {
+  const seen = new Set();
+  const entries = [];
+  let root = '';
+  for (const f of fileList) {
+    const rel = f.webkitRelativePath || f.name;
+    const parts = rel.split(/[\\/]/);
+    if (!root && parts.length > 1) root = parts[0];
+    const name = parts[parts.length - 1];
+    const k = kindOf(name);
+    if (!k || isTemp(name)) continue;
+    if (parts.slice(1, -1).some((d) => EXCL_DIR.test(d))) continue;
+    const key = normPath(rel);
+    if (seen.has(key)) continue; // provider may list items twice
+    seen.add(key);
+    entries.push({ file: f, rel, key, dir: parts.slice(0, -1).join('/'), sub: parts.slice(1, -1).join('/'), name, kind: k, size: f.size, mtime: f.lastModified || 0 });
+  }
+  const by = (k) => entries.filter((e) => e.kind === k).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+  return { root: root || 'Folder', prjs: by('prj'), schs: by('sch'), pcbs: by('pcb'), entries };
+}
+
+/** Find files referenced by a project inside the scanned folder. */
+export async function resolveProject(prjEntry, scan) {
+  const text = await prjEntry.file.text();
+  const docs = parsePrj(text);
+  const docsInScan = scan.entries.filter((e) => e.kind !== 'prj');
+  const prjDir = prjEntry.dir;
+  for (const d of docs) {
+    const want = normPath(prjDir + '/' + d.path);
+    let hit = docsInScan.find((e) => e.key === want);
+    if (!hit) hit = docsInScan.find((e) => e.dir === prjDir && e.name.toLowerCase() === d.name.toLowerCase());
+    if (!hit) hit = docsInScan.filter((e) => e.name.toLowerCase() === d.name.toLowerCase()).sort((a, b) => a.key.split('/').length - b.key.split('/').length)[0];
+    d.entry = hit || null;
+  }
+  return { text, docs };
+}
+
+/** Import a project picked from a folder: reads only the documents listed in .PrjPcb */
+export async function importProjectFromFolder(prjEntry, scan, existing, onProgress) {
+  const { text, docs } = await resolveProject(prjEntry, scan);
+  let proj = existing.find((p) => p.prjName && p.prjName.toLowerCase() === prjEntry.name.toLowerCase());
+  const isUpdate = !!proj;
+  proj = proj ? { ...proj, files: {} } : { id: uuid(), created: Date.now(), files: {} };
+  Object.assign(proj, { kind: 'project', name: prjEntry.name.replace(/\.prjpcb$/i, ''), prjName: prjEntry.name, prjText: text, docs: docs.map(({ name, kind, path }) => ({ name, kind, path })), updated: Date.now() });
+  const imported = [], errors = [], missing = [];
+  let i = 0;
+  for (const d of docs) {
+    i++;
+    if (!d.entry) { missing.push(d.name); continue; }
+    onProgress && onProgress(`${d.name} (${i}/${docs.length})`);
+    try { proj.files[d.name.toLowerCase()] = await readDoc(d.entry.file, d.kind); imported.push(d.name); }
+    catch (e) { errors.push({ name: d.name, why: String(e.message || e) }); }
+  }
+  return { proj, imported, errors, missing, isUpdate, hasContent: imported.length > 0 };
+}
+
+/** Unsaved preview of loose documents */
+export async function buildPreview(files, onProgress) {
+  const proj = { id: null, kind: 'single', temp: true, name: '', docs: null, prjName: null, files: {}, created: Date.now(), updated: Date.now() };
+  const errors = [];
+  for (const f of files) {
+    const k = kindOf(f.name);
+    if (k !== 'sch' && k !== 'pcb') continue;
+    onProgress && onProgress(f.name);
+    try { proj.files[f.name.toLowerCase()] = await readDoc(f, k); } catch (e) { errors.push({ name: f.name, why: String(e.message || e) }); }
+  }
+  const names = Object.values(proj.files).map((f) => f.name);
+  proj.name = names.length === 1 ? names[0] : names.map((n) => n.replace(/\.(schdoc|pcbdoc)$/i, '')).join(' + ');
+  return { proj, errors };
+}
+export function newId() { return uuid(); }
 
 export async function requestPersist() {
   try { if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch (e) { /* ignore */ }
 }
+
+export { kindOf };

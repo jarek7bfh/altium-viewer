@@ -5,7 +5,7 @@ import { renderSch } from './schrender.js';
 import { renderPcb, PCB_LAYERS } from './pcbrender.js';
 import { Pane } from './pane.js';
 import { hitSch, hitPcb } from './hit.js';
-import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist } from './store.js';
+import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist, scanFolder, resolveProject, importProjectFromFolder, buildPreview, newId } from './store.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -35,6 +35,7 @@ let pickTarget = null;
 
 async function showHome() {
   $('#viewer').classList.add('hidden');
+  $('#browse').classList.add('hidden');
   $('#home').classList.remove('hidden');
   projects = await listProjects();
   const list = $('#plist');
@@ -51,14 +52,14 @@ async function showHome() {
     const el = document.createElement('div');
     el.className = 'card';
     el.innerHTML = `
-      <button class="open"><h3>${esc(p.name)}</h3><div class="meta">${names.size} ${names.size === 1 ? 'dokument' : names.size < 5 ? 'dokumenty' : 'dokumentów'} · ${fmtSize(size)} · zaktualizowano ${fmtDate(p.updated)}</div></button>
+      <button class="open"><h3>${esc(p.name)}</h3><div class="meta">${p.prjName ? '' : 'Pojedyncze pliki · '}${names.size} ${names.size === 1 ? 'dokument' : names.size >= 2 && names.size <= 4 ? 'dokumenty' : 'dokumentów'} · ${fmtSize(size)} · zaktualizowano ${fmtDate(p.updated)}</div></button>
       <div class="cact">
         <button class="ib upd" title="Aktualizuj z plików" aria-label="Aktualizuj"><svg><use href="#i-refresh"/></svg></button>
         <button class="ib del" title="Usuń z tabletu" aria-label="Usuń"><svg><use href="#i-trash"/></svg></button>
       </div>
       <div class="files">${chips}</div>`;
     $('.open', el).onclick = () => openProject(p.id);
-    $('.upd', el).onclick = () => { pickTarget = p; $('#picker').click(); };
+    $('.upd', el).onclick = () => { pickTarget = p; (p.kind !== 'single' && p.prjName && DIR_OK ? $('#picker-dir') : $('#picker')).click(); };
     $('.del', el).onclick = () => confirmDelete(`Usunąć projekt z tabletu?`, `„${p.name}” (${fmtSize(size)}) zostanie usunięty z pamięci tego tabletu. Pliki w Nextcloudzie pozostaną bez zmian.`, async () => { await deleteProject(p.id); toast('Usunięto „' + p.name + '”'); showHome(); });
     list.append(el);
   }
@@ -85,12 +86,126 @@ function confirmDelete(title, text, action) {
   d.showModal();
 }
 
+const DIR_OK = 'webkitdirectory' in document.createElement('input') && !/iPhone|iPad/.test(navigator.userAgent);
+if (!DIR_OK) { $('#add-dir').classList.add('hidden'); $('#hint-dir').classList.add('hidden'); $('#hint-files').classList.remove('hidden'); $('#add').classList.add('primary'); }
 $('#add').onclick = () => { pickTarget = null; $('#picker').click(); };
+$('#add-dir').onclick = () => { pickTarget = null; $('#picker-dir').click(); };
+$('#picker-dir').onchange = async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  const target = pickTarget; pickTarget = null;
+  if (files.length) await openFolder(files, target);
+};
+
+function setLoading(on, text = 'Wczytywanie…', host = document.body) {
+  const ld = $('#loading');
+  if (on) { host.append(ld); $('#ld-text').textContent = text; ld.classList.remove('hidden'); }
+  else ld.classList.add('hidden');
+}
+
+// ---------------- folder browser ----------------
+let SCAN = null;
+async function openFolder(files, target) {
+  SCAN = scanFolder(files);
+  // update of an existing project: re-import its .PrjPcb directly
+  if (target && target.prjName) {
+    const pe = SCAN.prjs.find((e) => e.name.toLowerCase() === target.prjName.toLowerCase());
+    if (pe) { await importFromFolder(pe); return; }
+    toast(`W tym folderze nie ma pliku ${target.prjName}`, 4000);
+  }
+  showBrowse();
+}
+
+const icon = (k) => `<svg class="bi"><use href="#${k === 'prj' ? 'i-folder' : k === 'sch' ? 'i-net' : 'i-chip'}"/></svg>`;
+async function showBrowse() {
+  $('#home').classList.add('hidden'); $('#viewer').classList.add('hidden'); $('#browse').classList.remove('hidden');
+  $('#b-name').textContent = SCAN.root;
+  const L = $('#b-list');
+  const row = (e, extra = '', meta = '') => `<button class="brow ${e.kind}" data-key="${esc(e.key)}">${icon(e.kind)}<span class="bn">${esc(e.name)}</span><span class="bx">${fmtSize(e.size)}<br>${fmtDate(e.mtime).split(',')[0]}</span><span class="bm">${meta || (e.sub ? esc(e.sub) : '&nbsp;')}</span>${extra}</button>`;
+  if (!SCAN.prjs.length && !SCAN.schs.length && !SCAN.pcbs.length) {
+    L.innerHTML = `<div class="bempty"><p>W tym folderze nie ma plików .PrjPcb, .SchDoc ani .PcbDoc.</p><p class="small">Foldery History, Project Outputs, Project Logs i __Previews są pomijane.</p></div>`;
+    return;
+  }
+  let html = '';
+  if (SCAN.prjs.length) html += `<div class="bsec">Projekty <i>– wczytuje tylko pliki z projektu</i></div>` + SCAN.prjs.map((e) => row(e, `<span class="docs" data-docs="${esc(e.key)}"><span class="tag">sprawdzam pliki…</span></span>`)).join('');
+  if (SCAN.schs.length) html += `<div class="bsec">Schematy <i>– podgląd pojedynczego pliku</i></div>` + SCAN.schs.map((e) => row(e)).join('');
+  if (SCAN.pcbs.length) html += `<div class="bsec">Płytki PCB <i>– podgląd pojedynczego pliku</i></div>` + SCAN.pcbs.map((e) => row(e)).join('');
+  L.innerHTML = html;
+  L.scrollTop = 0;
+  const byKey = new Map(SCAN.entries.map((e) => [e.key, e]));
+  $$('.brow', L).forEach((b) => (b.onclick = () => {
+    const e = byKey.get(b.dataset.key);
+    if (e.kind === 'prj') importFromFolder(e); else previewFiles([e.file]);
+  }));
+  // resolve projects (reads only the small .PrjPcb files)
+  const used = new Map();
+  for (const e of SCAN.prjs) {
+    const box = L.querySelector(`[data-docs="${CSS.escape(e.key)}"]`);
+    try {
+      const { docs } = await resolveProject(e, SCAN);
+      const found = docs.filter((d) => d.entry).length;
+      for (const d of docs) if (d.entry) used.set(d.entry.key, (used.get(d.entry.key) || []).concat(e.name.replace(/\.prjpcb$/i, '')));
+      if (box) box.innerHTML = `<span class="${found === docs.length ? 'ok' : 'bad'}">${found}/${docs.length}</span>` + docs.map((d) => `<span class="tag${d.entry ? ' cur' : ''}" title="${d.entry ? esc(d.entry.rel) : 'brak w folderze'}">${esc(d.name)}</span>`).join('');
+    } catch (err) { if (box) box.innerHTML = '<span class="bad">nie udało się odczytać projektu</span>'; }
+  }
+  // mark docs used by projects
+  for (const [key, prjNames] of used) {
+    const b = L.querySelector(`.brow[data-key="${CSS.escape(key)}"] .bm`);
+    if (b) b.innerHTML = `<span class="ok">w projekcie ${esc(prjNames.join(', '))}</span>${byKey.get(key).sub ? ' · ' + esc(byKey.get(key).sub) : ''}`;
+  }
+}
+$('#b-back').onclick = () => showHome();
+$('#b-repick').onclick = () => { pickTarget = null; $('#picker-dir').click(); };
+
+async function importFromFolder(prjEntry) {
+  setLoading(true, 'Wczytywanie projektu…');
+  let r;
+  try { r = await importProjectFromFolder(prjEntry, SCAN, projects, (t) => { $('#ld-text').textContent = 'Wczytywanie ' + t; }); }
+  catch (e) { setLoading(false); await message('Nie udało się wczytać', `<p>${esc(e.message || e)}</p>`); return; }
+  setLoading(false);
+  if (r.hasContent) { await putProject(r.proj); requestPersist(); projects = await listProjects(); }
+  if (!r.hasContent) {
+    let html = '';
+    if (r.missing.length) html += `<p>Projekt wymienia pliki, których nie ma w tym folderze:</p><ul>${r.missing.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    if (r.errors.length) html += `<p>Błędy odczytu:</p><ul>${r.errors.map((e) => `<li>${esc(e.name)} – ${esc(e.why)}</li>`).join('')}</ul>`;
+    await message('Nic nie wczytano', html || '<p>Projekt nie zawiera schematów ani płytek.</p>');
+    return;
+  }
+  let t = `${r.isUpdate ? 'Zaktualizowano' : 'Zapisano'} „${r.proj.name}” (${r.imported.length} ${r.imported.length === 1 ? 'plik' : r.imported.length < 5 ? 'pliki' : 'plików'})`;
+  if (r.missing.length) t += ` · brak w folderze: ${r.missing.join(', ')}`;
+  if (r.errors.length) t += ` · błąd odczytu: ${r.errors.map((e) => e.name).join(', ')}`;
+  toast(t, r.missing.length || r.errors.length ? 6000 : 3000);
+  await openProj(r.proj);
+}
+
+async function previewFiles(files) {
+  setLoading(true, 'Wczytywanie…');
+  let r;
+  try { r = await buildPreview(files); } catch (e) { r = { proj: { files: {} }, errors: [{ name: '', why: String(e.message || e) }] }; }
+  setLoading(false);
+  if (!Object.keys(r.proj.files).length) { await message('Nie udało się otworzyć', `<ul>${r.errors.map((e) => `<li>${esc(e.name)} ${esc(e.why)}</li>`).join('')}</ul>`); return; }
+  if (r.errors.length) toast('Nie udało się odczytać: ' + r.errors.map((e) => e.name).join(', '), 5000);
+  await openProj(r.proj);
+}
 $('#del-all').onclick = () => confirmDelete('Usunąć wszystkie projekty?', `Wszystkie projekty (${projects.length}) zostaną usunięte z pamięci tego tabletu. Pliki w Nextcloudzie pozostaną bez zmian.`, async () => { await deleteAllProjects(); toast('Usunięto wszystkie projekty'); showHome(); });
 $('#picker').onchange = async (e) => {
   const files = [...e.target.files];
   e.target.value = '';
-  if (files.length) await doImport(files, pickTarget);
+  const target = pickTarget; pickTarget = null;
+  if (!files.length) return;
+  const hasPrj = files.some((f) => /\.prjpcb$/i.test(f.name));
+  if (!hasPrj && target && !target.prjName) { // update single-file entry
+    setLoading(true);
+    const r = await buildPreview(files);
+    setLoading(false);
+    if (Object.keys(r.proj.files).length) { await putProject({ ...target, files: r.proj.files, updated: Date.now() }); toast('Zaktualizowano „' + target.name + '”'); showHome(); }
+    else await message('Nic nie wczytano', '<p>Wybierz plik .SchDoc lub .PcbDoc.</p>');
+    return;
+  }
+  if (!hasPrj && !target) {
+    if (files.some((f) => /\.(schdoc|pcbdoc)$/i.test(f.name))) { await previewFiles(files); return; }
+  }
+  await doImport(files, target);
 };
 
 async function doImport(files, target) {
@@ -100,15 +215,22 @@ async function doImport(files, target) {
   try { r = await importFiles(files, target, projects); }
   catch (e) { ld.classList.add('hidden'); await message('Nie udało się wczytać', `<p>${esc(e.message || e)}</p>`); return; }
   ld.classList.add('hidden');
-  if (r.hasContent && (r.imported.length || r.isUpdate)) {
+  if ((r.hasContent && (r.imported.length || r.isUpdate)) || r.prjOnly) {
     await putProject(r.proj);
     requestPersist();
+  }
+  const TIP = '<p class="small">Wskazówka: w oknie wyboru plików <b>przytrzymaj</b> pierwszy plik – wtedy możesz zaznaczyć kilka naraz i zatwierdzić przyciskiem „Wybierz”.</p>';
+  if (r.prjOnly) {
+    const miss = (r.proj.docs || []).filter((d) => !r.proj.files[d.name.toLowerCase()]);
+    await showHome();
+    await message('Brakuje plików projektu', `<p>Zapisano projekt <b>${esc(r.proj.name)}</b>, ale do podglądu potrzebne są jeszcze ${miss.length === 1 ? 'plik' : 'pliki'}:</p><ul>${miss.map((d) => `<li>${esc(d.name)}</li>`).join('')}</ul><p>Stuknij ⟳ przy projekcie i zaznacz je (możesz zaznaczyć też ponownie plik .PrjPcb).</p>${TIP}`);
+    return;
   }
   const groups = {};
   for (const s of r.skipped) (groups[s.why] = groups[s.why] || []).push(s.name);
   let html = '';
   if (r.imported.length) html += `<p>${r.isUpdate ? 'Zaktualizowano' : 'Dodano'} projekt <b>${esc(r.proj.name)}</b>:</p><ul>${r.imported.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
-  else if (!r.errors.length) html += '<p>Nie znaleziono plików schematu ani PCB do wczytania.</p>';
+  else if (!r.errors.length) html += `<p>Wśród wybranych plików nie ma schematu (.SchDoc) ani płytki (.PcbDoc).</p><p class="small">Wybrano: ${r.picked.map(esc).join(', ') || '—'}</p>${TIP}`;
   if (r.errors.length) html += `<p>Błędy:</p><ul>${r.errors.map((e) => `<li>${esc(e.name)} – ${esc(e.why)}</li>`).join('')}</ul>`;
   const sk = Object.entries(groups);
   if (sk.length) html += `<p class="small">Pominięto ${r.skipped.length} ${r.skipped.length === 1 ? 'plik' : 'plików'}: ${sk.map(([why, n]) => `${esc(why)} (${n.length})`).join(', ')}.</p>`;
@@ -133,9 +255,19 @@ function getter(file) { return (p) => file.streams[p] || null; }
 async function openProject(id) {
   const proj = await getProject(id);
   if (!proj) return;
-  $('#home').classList.add('hidden');
+  if (!Object.keys(proj.files).length) {
+    const miss = (proj.docs || []).map((d) => `<li>${esc(d.name)}</li>`).join('');
+    await message('Projekt nie ma jeszcze plików', `<p>Dodaj schemat i płytkę przyciskiem ⟳ przy projekcie.</p>${miss ? `<p>Potrzebne pliki:</p><ul>${miss}</ul>` : ''}<p class="small">W oknie wyboru plików przytrzymaj pierwszy plik, aby zaznaczyć kilka naraz.</p>`);
+    return;
+  }
+  await openProj(proj);
+}
+
+async function openProj(proj) {
+  $('#home').classList.add('hidden'); $('#browse').classList.add('hidden');
   $('#viewer').classList.remove('hidden');
-  const ld = $('#loading'); $('#viewer').append(ld); ld.classList.remove('hidden');
+  $('#v-save').classList.toggle('hidden', !proj.temp);
+  const ld = $('#loading'); $('#viewer').append(ld); $('#ld-text').textContent = 'Wczytywanie…'; ld.classList.remove('hidden');
   await new Promise((r) => setTimeout(r, 30));
   V.proj = proj; V.sel = null;
   const order = (proj.docs || []).map((d) => d.name.toLowerCase());
@@ -153,7 +285,7 @@ async function openProject(id) {
   }
   // choose pcb: remembered, else the one with most components matching schematic designators
   const desSet = new Set(V.schs.flatMap((s) => s.data.components.map((c) => c.des)));
-  const remembered = LS.get('pcb.' + proj.id, null);
+  const remembered = proj.id ? LS.get('pcb.' + proj.id, null) : null;
   let best = 0, bestScore = -1;
   V.pcbs.forEach((p, i) => {
     let sc = p.data.components.filter((c) => desSet.has(c.des)).length;
@@ -243,8 +375,16 @@ function setMode(m) {
 }
 $$('#v-layout button').forEach((b) => (b.onclick = () => setLayout(b.dataset.v)));
 $$('#v-mode button').forEach((b) => (b.onclick = () => setMode(b.dataset.m)));
-$('#v-back').onclick = () => { closePops(); showHome(); };
-$('#v-pcb').onchange = (e) => { V.pcbIdx = +e.target.value; LS.set('pcb.' + V.proj.id, V.pcbs[V.pcbIdx].name); buildViews(); };
+$('#v-back').onclick = () => { closePops(); if (V.proj?.temp && SCAN) showBrowse(); else showHome(); };
+$('#v-pcb').onchange = (e) => { V.pcbIdx = +e.target.value; if (V.proj.id) LS.set('pcb.' + V.proj.id, V.pcbs[V.pcbIdx].name); buildViews(); };
+$('#v-save').onclick = async () => {
+  const p = { ...V.proj, id: newId(), temp: undefined, updated: Date.now() };
+  delete p.temp;
+  await putProject(p); requestPersist();
+  V.proj = p; projects = await listProjects();
+  $('#v-save').classList.add('hidden');
+  toast('Zapisano „' + p.name + '” na tablecie');
+};
 $('[data-fit=sch]').onclick = () => { const r = V.schR[V.si]; if (r) V.schPane.fitModel(r.bbox, 0.01); };
 $('[data-fit=pcb]').onclick = () => { if (V.pcbR) V.pcbPane.fitModel(V.pcbR.bbox, 0.04); };
 $('#flip').onclick = () => setFlip(!V.flip);
