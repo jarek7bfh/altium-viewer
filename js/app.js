@@ -59,7 +59,7 @@ async function showHome() {
       </div>
       <div class="files">${chips}</div>`;
     $('.open', el).onclick = () => openProject(p.id);
-    $('.upd', el).onclick = () => { pickTarget = p; (p.kind !== 'single' && p.prjName && DIR_OK ? $('#picker-dir') : $('#picker')).click(); };
+    $('.upd', el).onclick = () => { pickTarget = p; if (p.kind !== 'single' && p.prjName && DIR_OK) pickDir(); else $('#picker').click(); };
     $('.del', el).onclick = () => confirmDelete(`Usunąć projekt z tabletu?`, `„${p.name}” (${fmtSize(size)}) zostanie usunięty z pamięci tego tabletu. Pliki w Nextcloudzie pozostaną bez zmian.`, async () => { await deleteProject(p.id); toast('Usunięto „' + p.name + '”'); showHome(); });
     list.append(el);
   }
@@ -89,8 +89,31 @@ function confirmDelete(title, text, action) {
 const DIR_OK = 'webkitdirectory' in document.createElement('input') && !/iPhone|iPad/.test(navigator.userAgent);
 if (!DIR_OK) { $('#add-dir').classList.add('hidden'); $('#hint-dir').classList.add('hidden'); $('#hint-files').classList.remove('hidden'); $('#add').classList.add('primary'); }
 $('#add').onclick = () => { pickTarget = null; $('#picker').click(); };
-$('#add-dir').onclick = () => { pickTarget = null; $('#picker-dir').click(); };
+let wdTimer = null, picking = false;
+function pickDir() {
+  const w = $('#waitdir');
+  clearInterval(wdTimer);
+  picking = true;
+  const t0 = Date.now();
+  let shown = false;
+  // show the waiting screen once the system picker has returned to the page (unless cancel/change already came)
+  const show = () => setTimeout(() => {
+    if (shown || !picking) return; shown = true;
+    const t1 = Date.now();
+    $('#wd-sec').textContent = '0'; w.classList.remove('hidden');
+    wdTimer = setInterval(() => { $('#wd-sec').textContent = Math.round((Date.now() - t1) / 1000); }, 500);
+  }, 500);
+  const onFocus = () => { window.removeEventListener('focus', onFocus); if (Date.now() - t0 > 300) show(); };
+  setTimeout(() => window.addEventListener('focus', onFocus), 50);
+  document.addEventListener('visibilitychange', function vis() { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', vis); show(); } });
+  $('#picker-dir').click();
+}
+function hideWait() { picking = false; clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); }
+$('#wd-cancel').onclick = () => { clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); };
+$('#picker-dir').addEventListener('cancel', hideWait);
+$('#add-dir').onclick = () => { pickTarget = null; pickDir(); };
 $('#picker-dir').onchange = async (e) => {
+  hideWait();
   const files = [...e.target.files];
   e.target.value = '';
   const target = pickTarget; pickTarget = null;
@@ -126,7 +149,7 @@ async function showBrowse() {
     L.innerHTML = `<div class="bempty"><p>W tym folderze nie ma plików .PrjPcb, .SchDoc ani .PcbDoc.</p><p class="small">Foldery History, Project Outputs, Project Logs i __Previews są pomijane.</p></div>`;
     return;
   }
-  let html = '';
+  let html = SCAN.ignored ? `<p class="bsum">Pominięto ${SCAN.ignored} z ${SCAN.total} plików (historia, wyjścia produkcyjne, podglądy, inne typy). Aplikacja ich nie czyta.</p>` : '';
   if (SCAN.prjs.length) html += `<div class="bsec">Projekty <i>– wczytuje tylko pliki z projektu</i></div>` + SCAN.prjs.map((e) => row(e, `<span class="docs" data-docs="${esc(e.key)}"><span class="tag">sprawdzam pliki…</span></span>`)).join('');
   if (SCAN.schs.length) html += `<div class="bsec">Schematy <i>– podgląd pojedynczego pliku</i></div>` + SCAN.schs.map((e) => row(e)).join('');
   if (SCAN.pcbs.length) html += `<div class="bsec">Płytki PCB <i>– podgląd pojedynczego pliku</i></div>` + SCAN.pcbs.map((e) => row(e)).join('');
@@ -155,7 +178,7 @@ async function showBrowse() {
   }
 }
 $('#b-back').onclick = () => showHome();
-$('#b-repick').onclick = () => { pickTarget = null; $('#picker-dir').click(); };
+$('#b-repick').onclick = () => { pickTarget = null; pickDir(); };
 
 async function importFromFolder(prjEntry) {
   setLoading(true, 'Wczytywanie projektu…');

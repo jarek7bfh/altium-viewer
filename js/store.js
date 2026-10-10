@@ -198,21 +198,22 @@ export function scanFolder(fileList) {
   const seen = new Set();
   const entries = [];
   let root = '';
+  let ignored = 0;
   for (const f of fileList) {
     const rel = f.webkitRelativePath || f.name;
     const parts = rel.split(/[\\/]/);
     if (!root && parts.length > 1) root = parts[0];
     const name = parts[parts.length - 1];
     const k = kindOf(name);
-    if (!k || isTemp(name)) continue;
-    if (parts.slice(1, -1).some((d) => EXCL_DIR.test(d))) continue;
+    if (!k || isTemp(name)) { ignored++; continue; }
+    if (parts.slice(1, -1).some((d) => EXCL_DIR.test(d))) { ignored++; continue; }
     const key = normPath(rel);
     if (seen.has(key)) continue; // provider may list items twice
     seen.add(key);
     entries.push({ file: f, rel, key, dir: parts.slice(0, -1).join('/'), sub: parts.slice(1, -1).join('/'), name, kind: k, size: f.size, mtime: f.lastModified || 0 });
   }
   const by = (k) => entries.filter((e) => e.kind === k).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
-  return { root: root || 'Folder', prjs: by('prj'), schs: by('sch'), pcbs: by('pcb'), entries };
+  return { root: root || 'Folder', prjs: by('prj'), schs: by('sch'), pcbs: by('pcb'), entries, total: fileList.length, ignored };
 }
 
 /** Find files referenced by a project inside the scanned folder. */

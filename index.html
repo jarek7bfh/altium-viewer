@@ -115,6 +115,13 @@
   <div id="loading" class="loading hidden"><div class="spin"></div><span id="ld-text">Wczytywanie…</span></div>
 </div>
 
+<div id="waitdir" class="loading hidden">
+  <div class="spin"></div>
+  <b>Czekam na listę plików z folderu… <span id="wd-sec">0</span> s</b>
+  <p class="wd-note">Android i Nextcloud najpierw przeglądają cały folder razem z podfolderami (History, Project Outputs). Przy dużej historii może to potrwać nawet minutę. Aplikacja pobierze potem tylko pliki projektu, który wybierzesz.</p>
+  <button id="wd-cancel" class="btn ghost">Ukryj</button>
+</div>
+
 <!-- ===== Dialogs ===== -->
 <dialog id="dlg-delete">
   <h3 id="d-title">Usunąć projekt z tabletu?</h3>

@@ -232,3 +232,8 @@ dialog p { color: #c4cad4; margin: 0 0 18px; }
 .tag.cur { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .bempty { color: var(--muted); padding: 30px 4px; }
 .small { font-size: 13px; color: var(--muted); }
+
+#waitdir { position: fixed; z-index: 40; background: rgba(15,18,23,.92); padding: 24px; text-align: center; color: var(--text); }
+#waitdir .wd-note { color: var(--muted); max-width: 46ch; margin: 0; }
+#wd-sec { font-variant-numeric: tabular-nums; }
+.bsum { color: var(--muted); font-size: 13px; margin: 0 2px 4px; }
