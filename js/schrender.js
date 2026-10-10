@@ -28,7 +28,7 @@ const BASE = ['auto', 'central', 'hanging'];
 function textEl(x, y, text, font, color, rot = 0, h = 0, v = 0, extra = '') {
   const fs = (font?.size || 10) * PT;
   const tr = rot ? ` transform="rotate(${-rot} ${f(x)} ${f(-y)})"` : '';
-  const style = `font-family:${fontFamily(font?.name)};font-size:${f(fs)}px;${font?.bold ? 'font-weight:bold;' : ''}${font?.italic ? 'font-style:italic;' : ''}${font?.underline ? 'text-decoration:underline;' : ''}`;
+  const style = `white-space:pre;font-family:${fontFamily(font?.name)};font-size:${f(fs)}px;${font?.bold ? 'font-weight:bold;' : ''}${font?.italic ? 'font-style:italic;' : ''}${font?.underline ? 'text-decoration:underline;' : ''}`;
   const lines = String(text).split('\n');
   if (lines.length === 1) {
     return `<text x="${f(x)}" y="${f(-y)}" fill="${color}" text-anchor="${ANCH[h]}" dominant-baseline="${BASE[v]}" style="${style}"${tr}${extra}>${overbar(text)}</text>`;

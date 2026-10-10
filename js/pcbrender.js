@@ -4,17 +4,17 @@ const f = (n) => Math.round(n * 100) / 100;
 
 export const PCB_LAYERS = [
   { id: 'mech', name: 'Mechaniczne', on: true },
-  { id: 'bpour', name: 'Wylewki – spód', on: true },
-  { id: 'bcu', name: 'Miedź – spód', on: true },
+  { id: 'bpour', name: 'Bottom – wylewki', on: true },
+  { id: 'bcu', name: 'Bottom – miedź', on: true },
   { id: 'inner', name: 'Warstwy wewnętrzne', on: true },
-  { id: 'tpour', name: 'Wylewki – góra', on: true },
-  { id: 'tcu', name: 'Miedź – góra', on: true },
+  { id: 'tpour', name: 'Top – wylewki', on: true },
+  { id: 'tcu', name: 'Top – miedź', on: true },
   { id: 'multi', name: 'Pady przewlekane', on: true },
   { id: 'via', name: 'Przelotki', on: true },
   { id: 'hole', name: 'Otwory', on: true },
   { id: 'keepout', name: 'Keep-out', on: false },
-  { id: 'bsilk', name: 'Opisy – spód', on: true },
-  { id: 'tsilk', name: 'Opisy – góra', on: true },
+  { id: 'bsilk', name: 'Bottom – opisy', on: true },
+  { id: 'tsilk', name: 'Top – opisy', on: true },
   { id: 'outline', name: 'Obrys płytki', on: true },
 ];
 

@@ -1,6 +1,6 @@
 {
   "name": "Altium Viewer",
-  "short_name": "Altium",
+  "short_name": "Altium Viewer",
   "description": "Przeglądarka schematów i PCB Altium z cross-selection",
   "start_url": "./",
   "scope": "./",

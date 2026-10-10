@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Altium Viewer</title>
+<meta name="application-name" content="Altium Viewer">
 <meta name="description" content="Przeglądarka schematów i PCB Altium na tablet – z cross-selection.">
 <meta name="theme-color" content="#0f1217">
 <link rel="manifest" href="manifest.webmanifest">
@@ -25,6 +26,7 @@
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5V18a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18V9a1.5 1.5 0 0 0-1.5-1.5H12l-2-2.5H4.5A1.5 1.5 0 0 0 3 6.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
   <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 6V3M12 6V3M15 6V3M9 21v-3M12 21v-3M15 21v-3M6 9H3M6 12H3M6 15H3M21 9h-3M21 12h-3M21 15h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   <symbol id="i-net" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="6" r="2.2" fill="currentColor"/><circle cx="19" cy="18" r="2.2" fill="currentColor"/><path d="M7 12h5V6h5M12 12v6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
@@ -94,7 +96,7 @@
     </section>
     <section class="pane dark" id="p-pcb">
       <div class="phost"></div>
-      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Góra</span></button></div>
+      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Top</span></button></div>
       <div class="ptools tr"><button class="fab" data-fit="pcb" aria-label="Dopasuj"><svg><use href="#i-fit"/></svg></button></div>
       <div class="pempty hidden">Brak płytki w projekcie</div>
     </section>
@@ -102,7 +104,7 @@
   <aside id="info" class="hidden">
     <div class="ihead">
       <div class="ititle"><span id="i-kind"></span><h2 id="i-title"></h2><span id="i-sub"></span></div>
-      <button id="i-collapse" class="ib sm" aria-label="Zwiń">⌄</button>
+      <button id="i-collapse" class="ib sm" aria-label="Zwiń lub rozwiń"><svg><use href="#i-chev"/></svg></button>
       <button id="i-close" class="ib sm" aria-label="Wyczyść zaznaczenie"><svg><use href="#i-close"/></svg></button>
     </div>
     <div id="i-body" class="ibody"></div>

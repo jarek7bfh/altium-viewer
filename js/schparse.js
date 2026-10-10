@@ -52,6 +52,11 @@ function textPlacement(orient, just) {
 
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
+/** Altium text-frame escapes: ~1 = line break, ~2 = '|' (field separator in the file), ~~ = '~' */
+export function decodeFrameText(t) {
+  return String(t || '').replace(/~([12~])/g, (_, c) => (c === '1' ? '\n' : c === '2' ? '|' : '~'));
+}
+
 export function parseSch(get) {
   const R = records(get('FileHeader'));
   const objs = R.slice(1); // index = OwnerIndex
@@ -263,7 +268,7 @@ export function parseSch(get) {
       }
       case '28': case '209': { // text frame / note
         const a = loc(p), b = corner(p);
-        prims.push({ t: 'frame', comp: ci, kind: 'text', x1: a[0], y1: a[1], x2: b[0], y2: b[1], text: (p.TEXT || '').replace(/~1/g, '\n'), font: font(num(p.FONTID, 1)), color: color(p.TEXTCOLOR, '#000000'), border: bool(p.SHOWBORDER), bcolor: col('COLOR', '#000000'), fill: bool(p.ISSOLID) ? color(p.AREACOLOR, '#ffffff') : null, align: num(p.ALIGNMENT) });
+        prims.push({ t: 'frame', comp: ci, kind: 'text', x1: a[0], y1: a[1], x2: b[0], y2: b[1], text: decodeFrameText(p.TEXT), font: font(num(p.FONTID, 1)), color: color(p.TEXTCOLOR, '#000000'), border: bool(p.SHOWBORDER), bcolor: col('COLOR', '#000000'), fill: bool(p.ISSOLID) ? color(p.AREACOLOR, '#ffffff') : null, align: num(p.ALIGNMENT) });
         break;
       }
       case '29': { const [x, y] = loc(p); junctions.push([x, y]); prims.push({ t: 'junction', comp: -1, kind: 'junction', x, y, color: col('COLOR', '#000080') }); break; }

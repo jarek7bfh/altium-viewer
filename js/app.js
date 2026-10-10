@@ -18,7 +18,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('av.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
 };
 const NS = 'http://www.w3.org/2000/svg';
-export const APP_VERSION = '5';
+export const APP_VERSION = '7';
 
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -407,7 +407,7 @@ $('#flip').onclick = () => setFlip(!V.flip);
 function setFlip(f) {
   V.flip = f;
   $('#flip').classList.toggle('on', f);
-  $('#flip span').textContent = f ? 'Spód' : 'Góra';
+  $('#flip span').textContent = f ? 'Bottom' : 'Top';
   drawPcb(false);
   applySel(V.sel, 'none');
   updateLayersUI();
@@ -542,11 +542,13 @@ function highlightPcb(sel) {
 }
 
 // ---------------- info panel ----------------
+let INFO_COLLAPSED = true; // panel starts minimised; user's choice is kept for the session
 const HIDE_PARAMS = /^(comment|designator|currenttime|currentdate|time|date|ki_|libref|component kind|componentlink)/i;
 function renderInfo(sel) {
   const box = $('#info');
   if (!sel) { box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
+  box.classList.toggle('collapsed', INFO_COLLAPSED);
   const body = $('#i-body');
   const L = V.link;
   const pcb = V.pcbs[V.pcbIdx]?.data;
@@ -560,14 +562,12 @@ function renderInfo(sel) {
     $('#i-title').textContent = sel.des;
     $('#i-sub').textContent = sc?.comment || pc?.comment || '';
     const rows = [];
-    if (sc?.desc || pc?.desc) rows.push(['Opis', sc?.desc || pc.desc]);
-    if (sc?.lib || pc?.lib) rows.push(['Symbol', sc?.lib || pc.lib]);
-    if (pc?.pattern || sc?.footprint) rows.push(['Obudowa', pc?.pattern || sc.footprint]);
-    if (pc) rows.push(['Strona', pc.layer === 'TOP' ? 'Góra' : 'Spód'], ['Pozycja', `${((pc.x - pcb.board.originX) * 0.0254).toFixed(2).replace('.', ',')} ; ${((pc.y - pcb.board.originY) * 0.0254).toFixed(2).replace('.', ',')} mm · ${+pc.rot.toFixed(1)}°`]);
-    else if (V.pcbs.length) rows.push(['PCB', 'brak na płytce']);
-    if (!sc && V.schs.length) rows.push(['Schemat', 'brak na schemacie']);
-    if (parts.length > 1) rows.push(['Części', parts.length + ' (wieloczęściowy)']);
-    if (sc) for (const [k, v] of Object.entries(sc.params)) if (v && v !== '*' && !HIDE_PARAMS.test(k)) rows.push([k, v]);
+    const desc = sc?.desc || pc?.desc || sc?.lib || pc?.lib;
+    if (desc) rows.push(['Opis', desc]);
+    const fp = pc?.pattern || sc?.footprint;
+    if (fp) rows.push(['Footprint', fp]);
+    if (pc) rows.push(['Strona', pc.layer === 'TOP' ? 'Top' : 'Bottom'], ['Pozycja', `${((pc.x - pcb.board.originX) * 0.0254).toFixed(2).replace('.', ',')} ; ${((pc.y - pcb.board.originY) * 0.0254).toFixed(2).replace('.', ',')} mm · ${+pc.rot.toFixed(1)}°`]);
+    else if (V.pcbs.length) rows.push(['Strona', 'brak na płytce']);
     // pins
     const pins = [];
     for (const [si, c] of parts) for (const p of V.schs[si].data.pins) if (p.comp === c.ci) pins.push({ des: p.des, name: p.name, net: L.pinNet[si][p.pi] });
@@ -615,7 +615,9 @@ function renderInfo(sel) {
   $$('[data-des]', body).forEach((b) => (b.onclick = () => applySel({ type: 'comp', des: b.dataset.des }, 'none')));
 }
 $('#i-close').onclick = () => applySel(null);
-$('#i-collapse').onclick = () => $('#info').classList.toggle('collapsed');
+const toggleInfo = () => { INFO_COLLAPSED = !INFO_COLLAPSED; $('#info').classList.toggle('collapsed', INFO_COLLAPSED); };
+$('#i-collapse').onclick = toggleInfo;
+$('.ititle').onclick = toggleInfo;
 
 function showIssues() {
   const pcb = V.pcbs[V.pcbIdx]?.data;
@@ -680,9 +682,9 @@ const LCOL = { mech: '#b27cf7', bpour: '#3d6fd6', bcu: '#3d6fd6', inner: '#3fae6
 function updateLayersUI() {
   const p = $('#layers-pop');
   const rows = PCB_LAYERS.slice().reverse().map((l) => `<div class="lrow" data-l="${l.id}"><span class="sw" style="background:${LCOL[l.id]};${l.id.endsWith('pour') ? 'opacity:.5' : ''}"></span><span class="lname">${l.name}</span><span class="tog ${V.vis[l.id] ? 'on' : ''}"></span></div>`).join('');
-  p.innerHTML = `<div class="lrow" data-act="flip"><span class="lname"><b>Widok od spodu</b></span><span class="tog ${V.flip ? 'on' : ''}"></span></div>
-    <div class="lrow" data-act="only-top"><span class="lname">Tylko strona górna</span></div>
-    <div class="lrow" data-act="only-bot"><span class="lname">Tylko strona dolna</span></div>
+  p.innerHTML = `<div class="lrow" data-act="flip"><span class="lname"><b>Widok od strony Bottom</b></span><span class="tog ${V.flip ? 'on' : ''}"></span></div>
+    <div class="lrow" data-act="only-top"><span class="lname">Tylko Top</span></div>
+    <div class="lrow" data-act="only-bot"><span class="lname">Tylko Bottom</span></div>
     <div class="lrow" data-act="all"><span class="lname">Wszystkie warstwy</span></div>
     <div class="lsep"></div>${rows}`;
   $$('.lrow', p).forEach((r) => (r.onclick = () => {
