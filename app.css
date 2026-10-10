@@ -252,3 +252,25 @@ dialog p { color: #c4cad4; margin: 0 0 18px; }
 .chip.dim { opacity: .6; }
 .opt { display: flex; align-items: center; gap: 10px; margin: -8px 2px 18px; color: var(--muted); font-size: 14px; cursor: pointer; }
 .opt input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* ---------- Gerber ---------- */
+#p-pcb.gerber .gl { fill: var(--c); stroke: none; }
+#p-pcb.gerber .gl .s { fill: none; stroke: var(--c); stroke-linecap: round; stroke-linejoin: round; }
+#p-pcb.gerber .gl.t-mask, #p-pcb.gerber .gl.t-paste { opacity: .55; }
+#p-pcb.gerber .gl.drill { fill: #0b0b0b; }
+#p-pcb.gerber .gl.drill circle, #p-pcb.gerber .gl.drill .s { stroke: #9aa3ad; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+#p-pcb.gerber .gl.drill .s { stroke: #0b0b0b; stroke-width: inherit; vector-effect: none; }
+#p-pcb.gerber .mk { fill: #000; } #p-pcb.gerber .mk .s { fill: none; stroke: #000; stroke-linecap: round; }
+#p-pcb.gerber .mkw { fill: #fff; } #p-pcb.gerber .mkw .s { fill: none; stroke: #fff; stroke-linecap: round; }
+#p-pcb.gerber .b-mask { fill: #1d5f36; }
+#p-pcb.gerber .b-cu-under { fill: #2c7d48; } #p-pcb.gerber .b-cu-under .s { fill: none; stroke: #2c7d48; stroke-linecap: round; }
+#p-pcb.gerber .b-fr4 { fill: #b9a873; }
+#p-pcb.gerber .b-cu-open { fill: #d4af37; } #p-pcb.gerber .b-cu-open .s { fill: none; stroke: #d4af37; stroke-linecap: round; }
+#p-pcb.gerber .b-silk { fill: #f4f4f0; } #p-pcb.gerber .b-silk .s { fill: none; stroke: #f4f4f0; stroke-linecap: round; }
+#p-pcb.gerber .b-drill { fill: #0b0b0b; } #p-pcb.gerber .b-drill .s { fill: none; stroke: #0b0b0b; stroke-linecap: round; }
+#p-pcb.gerber .b-edge { fill: none; stroke: #9aa3ad; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+#p-pcb.gerber .ov .gl { opacity: 1 !important; }
+#p-pcb.gerber .ov .gl { filter: drop-shadow(0 0 calc(var(--px, 0.05) * 1.6px) #fff) drop-shadow(0 0 calc(var(--px, 0.05) * 1px) #fff); }
+.lrow small { color: var(--muted); font-size: 12px; }
+.lrow.dim { opacity: .45; }
+.brow.gerber .bi { color: #4ade80; }

@@ -1,6 +1,7 @@
 // Local project storage (IndexedDB) + import filtering
 import { SCH_STREAMS, parseSch } from './schparse.js';
 import { PCB_STREAMS, parsePcb } from './pcbparse.js';
+import { GERBER_EXT, sniffKind } from './gerber.js';
 
 const DB_NAME = 'altium-viewer';
 const DB_VER = 1;
@@ -50,6 +51,7 @@ export function projectSize(p) {
   for (const f of Object.values(p.files || {})) {
     for (const s of Object.values(f.streams || {})) n += s.byteLength;
     for (const m of Object.values(f.meshes || {})) n += m.pos.byteLength + m.col.byteLength + m.idx.byteLength;
+    if (f.gz) n += f.gz.byteLength;
   }
   return n + (p.prjText ? p.prjText.length : 0);
 }
@@ -215,12 +217,24 @@ export function scanFolder(fileList) {
   const entries = [];
   let root = '';
   let ignored = 0;
+  const gdirs = new Map();
   for (const f of fileList) {
     const rel = f.webkitRelativePath || f.name;
     const parts = rel.split(/[\\/]/);
     if (!root && parts.length > 1) root = parts[0];
     const name = parts[parts.length - 1];
     const k = kindOf(name);
+    // Gerber / drill candidates (also inside "Project Outputs…", never inside History/Previews)
+    if (!k && (GERBER_EXT.test(name) || /\.txt$/i.test(name)) && !parts.slice(1, -1).some((d) => /^(history|__previews|previews|\.git|backup.*)$/i.test(d))) {
+      const dir = parts.slice(0, -1).join('/');
+      const key = normPath(rel);
+      if (!seen.has(key)) {
+        seen.add(key);
+        if (!gdirs.has(dir)) gdirs.set(dir, []);
+        gdirs.get(dir).push({ file: f, rel, key, name, size: f.size, mtime: f.lastModified || 0, gerberExt: GERBER_EXT.test(name) });
+      }
+      continue;
+    }
     if (!k || isTemp(name)) { ignored++; continue; }
     if (parts.slice(1, -1).some((d) => EXCL_DIR.test(d))) { ignored++; continue; }
     const key = normPath(rel);
@@ -229,7 +243,15 @@ export function scanFolder(fileList) {
     entries.push({ file: f, rel, key, dir: parts.slice(0, -1).join('/'), sub: parts.slice(1, -1).join('/'), name, kind: k, size: f.size, mtime: f.lastModified || 0 });
   }
   const by = (k) => entries.filter((e) => e.kind === k).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
-  return { root: root || 'Folder', prjs: by('prj'), schs: by('sch'), pcbs: by('pcb'), entries, total: fileList.length, ignored };
+  const gerbers = [];
+  for (const [dir, files] of gdirs) {
+    const nG = files.filter((x) => x.gerberExt).length;
+    if (nG < 2) { ignored += files.length; continue; }
+    const last = dir.split('/').pop() || root || 'Gerbery';
+    gerbers.push({ key: 'G:' + dir.toLowerCase(), dir, dirName: last, name: gerberSetName(last, files), files, size: files.reduce((a, x) => a + x.size, 0), mtime: Math.max(...files.map((x) => x.mtime)), nGerber: nG });
+  }
+  gerbers.sort((a, b) => a.dir.localeCompare(b.dir, undefined, { numeric: true }));
+  return { root: root || 'Folder', prjs: by('prj'), schs: by('sch'), pcbs: by('pcb'), gerbers, entries, total: fileList.length, ignored };
 }
 
 /** Find files referenced by a project inside the scanned folder. */
@@ -282,6 +304,47 @@ export async function buildPreview(files, onProgress) {
   return { proj, errors };
 }
 export function newId() { return uuid(); }
+
+// ---------------- Gerber sets ----------------
+function commonStem(names) {
+  const stems = names.map((n) => n.replace(/\.[^.]+$/, '').replace(/[-_](f|b)[._](cu|mask|silks?|paste)|[-_](roundholes|slotholes|plated|nonplated|npth|pth)$/i, ''));
+  const counts = new Map(); for (const s of stems) counts.set(s, (counts.get(s) || 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+export function gerberSetName(dirName, files) {
+  const stem = commonStem(files.filter((x) => GERBER_EXT.test(x.name)).map((x) => x.name));
+  const m = /^project outputs for (.+)$/i.exec(dirName);
+  return (stem || (m ? m[1] : dirName)) + ' – Gerbery';
+}
+async function gzip(text) {
+  const cs = new CompressionStream('gzip');
+  return new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(cs)).arrayBuffer());
+}
+export async function gunzipText(u8) {
+  const ds = new DecompressionStream('gzip');
+  return await new Response(new Blob([u8]).stream().pipeThrough(ds)).text();
+}
+/** read candidate files, keep only real Gerber / Excellon content, store compressed */
+export async function importGerberFiles(cands, name, dir, existing, onProgress) {
+  const files = {};
+  let i = 0, skipped = 0;
+  for (const c of cands) {
+    i++; onProgress && onProgress(`${c.name} (${i}/${cands.length})`);
+    let text;
+    try { text = await c.file.text(); } catch (e) { skipped++; continue; }
+    const kind = sniffKind(text);
+    if (!kind) { skipped++; continue; }
+    files[c.name.toLowerCase()] = { name: c.name, kind, size: c.size, lastModified: c.mtime || Date.now(), gz: await gzip(text) };
+  }
+  let proj = existing.find((p) => p.kind === 'gerber' && (p.gdir ? p.gdir.toLowerCase() === (dir || '').toLowerCase() && p.name === name : p.name === name));
+  const isUpdate = !!proj;
+  proj = proj ? { ...proj } : { id: uuid(), created: Date.now() };
+  Object.assign(proj, { kind: 'gerber', name, gdir: dir || '', files, docs: null, prjName: null, updated: Date.now() });
+  return { proj, count: Object.keys(files).length, skipped, isUpdate };
+}
+export function looksLikeGerberPick(files) {
+  return files.length > 0 && files.every((f) => !kindOf(f.name)) && files.some((f) => GERBER_EXT.test(f.name));
+}
 
 export async function requestPersist() {
   try { if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch (e) { /* ignore */ }

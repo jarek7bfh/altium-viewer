@@ -209,7 +209,9 @@ export class Pane {
     if (dbl) { clearTimeout(this._tapT); this.zoomAt(px, py, 2); return; }
     const tol = (type === 'mouse' ? 6 : 14) * k;
     clearTimeout(this._tapT);
-    this._tapT = setTimeout(() => this.onTap && this.onTap(mx, my, tol), type === 'mouse' ? 0 : 220);
+    const r = this.host.getBoundingClientRect();
+    const client = { cx: r.left + px, cy: r.top + py, type };
+    this._tapT = setTimeout(() => this.onTap && this.onTap(mx, my, tol, client), type === 'mouse' ? 0 : 220);
   }
 
   clearOverlay() { this.ov.replaceChildren(); this.base.classList.remove('dim'); }

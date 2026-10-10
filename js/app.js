@@ -5,7 +5,8 @@ import { renderSch } from './schrender.js';
 import { renderPcb, PCB_LAYERS } from './pcbrender.js';
 import { Pane } from './pane.js';
 import { hitSch, hitPcb } from './hit.js';
-import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist, scanFolder, resolveProject, importProjectFromFolder, buildPreview, newId } from './store.js';
+import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist, scanFolder, resolveProject, importProjectFromFolder, buildPreview, newId, importGerberFiles, gunzipText, looksLikeGerberPick } from './store.js';
+import { buildGerberSet, renderLayers, renderBoard, defaultOn } from './gerberrender.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -18,7 +19,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('av.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
 };
 const NS = 'http://www.w3.org/2000/svg';
-export const APP_VERSION = '10';
+export const APP_VERSION = '0.4.0';
 
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -55,17 +56,21 @@ async function showHome() {
       const f = p.files[d.name.toLowerCase()];
       return f ? `<span class="fchip">${esc(f.name)}<i>${fmtDate(f.lastModified).split(',')[0]}${f.meshes ? ' · 3D' : Object.keys(f.streams || {}).some((k) => /^Models\/\d+$/.test(k)) ? ' · STEP' : ''}</i></span>` : `<span class="fchip miss" title="Nie wczytano">${esc(d.name)}</span>`;
     }).join('');
+    const nDocs = names.size;
+    const meta = p.kind === 'gerber'
+      ? `Gerbery · ${nDocs} ${nDocs === 1 ? 'plik' : nDocs < 5 ? 'pliki' : 'plików'} · ${fmtSize(size)} · zaktualizowano ${fmtDate(p.updated)}`
+      : `${p.prjName ? '' : 'Pojedyncze pliki · '}${nDocs} ${nDocs === 1 ? 'dokument' : nDocs >= 2 && nDocs <= 4 ? 'dokumenty' : 'dokumentów'} · ${fmtSize(size)} · zaktualizowano ${fmtDate(p.updated)}`;
     const el = document.createElement('div');
     el.className = 'card';
     el.innerHTML = `
-      <button class="open"><h3>${esc(p.name)}</h3><div class="meta">${p.prjName ? '' : 'Pojedyncze pliki · '}${names.size} ${names.size === 1 ? 'dokument' : names.size >= 2 && names.size <= 4 ? 'dokumenty' : 'dokumentów'} · ${fmtSize(size)} · zaktualizowano ${fmtDate(p.updated)}</div></button>
+      <button class="open"><h3>${esc(p.name)}</h3><div class="meta">${meta}</div></button>
       <div class="cact">
         <button class="ib upd" title="Aktualizuj z plików" aria-label="Aktualizuj"><svg><use href="#i-refresh"/></svg></button>
         <button class="ib del" title="Usuń z tabletu" aria-label="Usuń"><svg><use href="#i-trash"/></svg></button>
       </div>
       <div class="files">${chips}</div>`;
     $('.open', el).onclick = () => openProject(p.id);
-    $('.upd', el).onclick = () => { pickTarget = p; if (p.kind !== 'single' && p.prjName && DIR_OK) pickDir(); else $('#picker').click(); };
+    $('.upd', el).onclick = () => { pickTarget = p; if ((p.kind === 'gerber' || (p.kind !== 'single' && p.prjName)) && DIR_OK) pickDir(); else $('#picker').click(); };
     $('.del', el).onclick = () => confirmDelete(`Usunąć projekt z tabletu?`, `„${p.name}” (${fmtSize(size)}) zostanie usunięty z pamięci tego tabletu. Pliki w Nextcloudzie pozostaną bez zmian.`, async () => { await deleteProject(p.id); toast('Usunięto „' + p.name + '”'); showHome(); });
     list.append(el);
   }
@@ -125,6 +130,11 @@ let SCAN = null;
 async function openFolder(files, target) {
   SCAN = scanFolder(files);
   // update of an existing project: re-import its .PrjPcb directly
+  if (target && target.kind === 'gerber') {
+    const g = SCAN.gerbers.find((x) => x.name === target.name) || SCAN.gerbers.find((x) => target.gdir && x.dirName.toLowerCase() === target.gdir.split('/').pop().toLowerCase());
+    if (g) { await importGerberGroup(g); return; }
+    toast('W tym folderze nie znalazłem tych Gerberów', 4000);
+  }
   if (target && target.prjName) {
     const pe = SCAN.prjs.find((e) => e.name.toLowerCase() === target.prjName.toLowerCase());
     if (pe) { await importFromFolder(pe); return; }
@@ -140,18 +150,20 @@ async function showBrowse() {
   $('#b-name').textContent = SCAN.root;
   const L = $('#b-list');
   const row = (e, extra = '', meta = '') => `<button class="brow ${e.kind}" data-key="${esc(e.key)}">${icon(e.kind)}<span class="bn">${esc(e.name)}</span><span class="bx">${fmtSize(e.size)}<br>${fmtDate(e.mtime).split(',')[0]}</span><span class="bm">${meta || (e.sub ? esc(e.sub) : '&nbsp;')}</span>${extra}</button>`;
-  if (!SCAN.prjs.length && !SCAN.schs.length && !SCAN.pcbs.length) {
-    L.innerHTML = `<div class="bempty"><p>W tym folderze nie ma plików .PrjPcb, .SchDoc ani .PcbDoc.</p><p class="small">Foldery History, Project Outputs, Project Logs i __Previews są pomijane.</p></div>`;
+  if (!SCAN.prjs.length && !SCAN.schs.length && !SCAN.pcbs.length && !SCAN.gerbers.length) {
+    L.innerHTML = `<div class="bempty"><p>W tym folderze nie ma plików .PrjPcb, .SchDoc, .PcbDoc ani Gerberów.</p><p class="small">Foldery History, Project Outputs, Project Logs i __Previews są pomijane.</p></div>`;
     return;
   }
   let html = SCAN.ignored ? `<p class="bsum">Pominięto ${SCAN.ignored} z ${SCAN.total} plików (historia, wyjścia produkcyjne, podglądy, inne typy). Aplikacja ich nie czyta.</p>` : '';
   if (SCAN.prjs.length) html += `<div class="bsec">Projekty <i>– wczytuje tylko pliki z projektu</i></div>` + SCAN.prjs.map((e) => row(e, `<span class="docs" data-docs="${esc(e.key)}"><span class="tag">sprawdzam pliki…</span></span>`)).join('');
   if (SCAN.schs.length) html += `<div class="bsec">Schematy <i>– podgląd pojedynczego pliku</i></div>` + SCAN.schs.map((e) => row(e)).join('');
   if (SCAN.pcbs.length) html += `<div class="bsec">Płytki PCB <i>– podgląd pojedynczego pliku</i></div>` + SCAN.pcbs.map((e) => row(e)).join('');
+  if (SCAN.gerbers.length) html += `<div class="bsec">Gerbery <i>– komplet warstw z folderu</i></div>` + SCAN.gerbers.map((g) => `<button class="brow gerber" data-gkey="${esc(g.key)}"><svg class="bi"><use href="#i-layers"/></svg><span class="bn">${esc(g.name)}</span><span class="bx">${fmtSize(g.size)}<br>${fmtDate(g.mtime).split(',')[0]}</span><span class="bm">${esc(g.dir.split('/').slice(1).join('/') || g.dirName)} · ${g.nGerber} warstw</span></button>`).join('');
   L.innerHTML = html;
   L.scrollTop = 0;
   const byKey = new Map(SCAN.entries.map((e) => [e.key, e]));
   $$('.brow', L).forEach((b) => (b.onclick = () => {
+    if (b.dataset.gkey) { importGerberGroup(SCAN.gerbers.find((g) => g.key === b.dataset.gkey)); return; }
     const e = byKey.get(b.dataset.key);
     if (e.kind === 'prj') importFromFolder(e); else previewFiles([e.file]);
   }));
@@ -217,6 +229,11 @@ $('#picker').onchange = async (e) => {
   e.target.value = '';
   const target = pickTarget; pickTarget = null;
   if (!files.length) return;
+  if (looksLikeGerberPick(files)) {
+    const cands = files.map((f) => ({ file: f, name: f.name, size: f.size, mtime: f.lastModified }));
+    await importGerberCands(cands, null, target && target.kind === 'gerber' ? target.name : null);
+    return;
+  }
   const hasPrj = files.some((f) => /\.prjpcb$/i.test(f.name));
   if (!hasPrj && target && !target.prjName) { // update single-file entry
     setLoading(true);
@@ -286,10 +303,12 @@ async function openProject(id) {
     await message('Projekt nie ma jeszcze plików', `<p>Dodaj schemat i płytkę przyciskiem ⟳ przy projekcie.</p>${miss ? `<p>Potrzebne pliki:</p><ul>${miss}</ul>` : ''}<p class="small">W oknie wyboru plików przytrzymaj pierwszy plik, aby zaznaczyć kilka naraz.</p>`);
     return;
   }
+  if (proj.kind === 'gerber') { await openGerber(proj); return; }
   await openProj(proj);
 }
 
 async function openProj(proj) {
+  leaveGerberMode();
   $('#home').classList.add('hidden'); $('#browse').classList.add('hidden');
   $('#viewer').classList.remove('hidden');
   markSub();
@@ -417,9 +436,10 @@ $('#v-save').onclick = async () => {
   toast('Zapisano „' + p.name + '” na tablecie');
 };
 $('[data-fit=sch]').onclick = () => { const r = V.schR[V.si]; if (r) V.schPane.fitModel(r.bbox, 0.01); };
-$('[data-fit=pcb]').onclick = () => { if (V.is3d && V.v3d) V.v3d.viewAll(false); else if (V.pcbR) V.pcbPane.fitModel(V.pcbR.bbox, 0.04); };
+$('[data-fit=pcb]').onclick = () => { if (V.isGerber) gerberFit(); else if (V.is3d && V.v3d) V.v3d.viewAll(false); else if (V.pcbR) V.pcbPane.fitModel(V.pcbR.bbox, 0.04); };
 $('#flip').onclick = () => setFlip(!V.flip);
 function setFlip(f) {
+  if (V.isGerber) { V.flip = f; $('#flip').classList.toggle('on', f); $('#flip span').textContent = f ? 'Bottom' : 'Top'; drawGerber(false); applySel(V.sel, 'none'); updateLayersUI(); return; }
   V.flip = f;
   $('#flip').classList.toggle('on', f);
   $('#flip span').textContent = f ? 'Bottom' : 'Top';
@@ -528,8 +548,9 @@ function onSchTap(x, y, tol) {
   else if (h.net >= 0) applySel(schNetSel(h.net), 'sch');
   else applySel(null, 'sch');
 }
-function onPcbTap(x, y, tol) {
+function onPcbTap(x, y, tol, client) {
   closePops();
+  if (V.isGerber) { onGerberTap(client); return; }
   const pcb = V.pcbs[V.pcbIdx]?.data; if (!pcb) return;
   const h = hitPcb(pcb, V.vis, V.flip, V.pcbR.compBox, x, y, tol, V.mode);
   if (h.comp >= 0) applySel({ type: 'comp', des: pcb.components[h.comp].des }, 'pcb');
@@ -549,6 +570,7 @@ function growBox(b, x1, y1, x2 = x1, y2 = y1) {
 }
 
 function applySel(sel, origin = 'none') {
+  if (V.isGerber) { V.sel = sel; const b = highlightGerber(sel); if (b && sel && origin !== 'pcb') V.pcbPane.reveal(b, 20); renderGerberInfo(sel); return; }
   V.sel = sel;
   // switch sheet if needed
   if (sel && V.schs.length > 1 && !sheetHas(V.si, sel)) {
@@ -737,6 +759,12 @@ $('#v-issues').onclick = showIssues;
 // ---------------- search ----------------
 let SIDX = [];
 function buildSearchIndex() {
+  if (V.isGerber) {
+    const g = V.gset;
+    SIDX = g.compNames.map((c) => ({ t: 'gcomp', key: c, sub: 'element (X2)' })).sort((a, b) => natCmp(a.key, b.key))
+      .concat(g.netNames.map((n) => ({ t: 'gnet', key: n, sub: 'sieć (X2)' })).sort((a, b) => natCmp(a.key, b.key)));
+    return;
+  }
   const comps = new Map();
   V.schs.forEach((s) => s.data.components.forEach((c) => { if (c.des && !comps.has(c.des)) comps.set(c.des, c.comment); }));
   const pcb = V.pcbs[V.pcbIdx]?.data;
@@ -759,14 +787,16 @@ function runSearch() {
     }).filter(([s]) => s < 9).sort((a, b) => a[0] - b[0] || natCmp(a[1].key, b[1].key)).map(([, it]) => it);
   }
   items = items.slice(0, 60);
-  res.innerHTML = items.map((it, i) => `<li data-i="${i}"><svg><use href="#${it.t === 'comp' ? 'i-chip' : 'i-net'}"/></svg><b>${esc(it.key)}</b><span>${esc(it.sub)}</span></li>`).join('') || '<li class="note">Brak wyników</li>';
+  res.innerHTML = items.map((it, i) => `<li data-i="${i}"><svg><use href="#${it.t === 'comp' || it.t === 'gcomp' ? 'i-chip' : 'i-net'}"/></svg><b>${esc(it.key)}</b><span>${esc(it.sub)}</span></li>`).join('') || '<li class="note">Brak wyników</li>';
   $$('li[data-i]', res).forEach((li) => (li.onclick = () => pick(items[+li.dataset.i])));
   res._items = items;
 }
 function pick(it) {
   closePops();
   let sel;
-  if (it.t === 'comp') sel = { type: 'comp', des: it.des };
+  if (it.t === 'gcomp') sel = { type: 'gcomp', des: it.key };
+  else if (it.t === 'gnet') sel = { type: 'gnet', name: it.key };
+  else if (it.t === 'comp') sel = { type: 'comp', des: it.des };
   else if (it.t === 'net') sel = schNetSel(it.id);
   else sel = pcbNetSel(it.id);
   applySel(sel, 'search');
@@ -783,6 +813,7 @@ $('#q').onkeydown = (e) => { if (e.key === 'Enter') { const it = $('#q-res')._it
 // ---------------- layers ----------------
 const LCOL = { mech: '#b27cf7', bpour: '#3d6fd6', bcu: '#3d6fd6', inner: '#3fae6a', tpour: '#d23a3a', tcu: '#d23a3a', multi: '#c9b26a', via: '#a9b0bb', hole: '#444', keepout: '#f0f', bsilk: '#c2a640', tsilk: '#f1e15a', outline: '#d7dbe2' };
 function updateLayersUI() {
+  if (V.isGerber) { updateGerberLayersUI(); return; }
   const p = $('#layers-pop');
   const rows = PCB_LAYERS.slice().reverse().map((l) => `<div class="lrow" data-l="${l.id}"><span class="sw" style="background:${LCOL[l.id]};${l.id.endsWith('pour') ? 'opacity:.5' : ''}"></span><span class="lname">${l.name}</span><span class="tog ${V.vis[l.id] ? 'on' : ''}"></span></div>`).join('');
   p.innerHTML = `<div class="lrow" data-act="flip"><span class="lname"><b>Widok od strony Bottom</b></span><span class="tog ${V.flip ? 'on' : ''}"></span></div>
@@ -824,6 +855,202 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'f' || e.key === '/') && document.activeElement !== $('#q')) { e.preventDefault(); $('#v-search').click(); }
 });
 
+
+// ---------------- Gerber ----------------
+async function importGerberGroup(g) {
+  await importGerberCands(g.files, g.dir, g.name);
+}
+async function importGerberCands(cands, dir, name) {
+  setLoading(true, 'Wczytywanie Gerberów…');
+  let r;
+  try {
+    const nm = name || (await import('./store.js')).gerberSetName(dir ? dir.split('/').pop() : 'Gerbery', cands);
+    r = await importGerberFiles(cands, nm, dir || '', projects, (t) => { $('#ld-text').textContent = 'Wczytywanie ' + t; });
+  } catch (e) { setLoading(false); await message('Nie udało się wczytać', `<p>${esc(e.message || e)}</p>`); return; }
+  setLoading(false);
+  if (!r.count) { await message('Nic nie wczytano', '<p>Wśród wybranych plików nie ma Gerberów ani plików wierceń.</p>'); return; }
+  await putProject(r.proj); requestPersist(); projects = await listProjects();
+  toast(`${r.isUpdate ? 'Zaktualizowano' : 'Zapisano'} „${r.proj.name}” (${r.count} ${r.count === 1 ? 'plik' : r.count < 5 ? 'pliki' : 'plików'})`);
+  V.gcache = null;
+  await openGerber(r.proj);
+}
+
+function leaveGerberMode() {
+  if (!V.isGerber) return;
+  V.isGerber = false; V.gset = null;
+  $('#v-layout').classList.remove('hidden');
+  $('#v-mode').classList.remove('hidden');
+  $('#gboard').classList.add('hidden');
+  $('#p-pcb').classList.remove('gerber');
+  V.pcbPane && V.pcbPane.ov.replaceChildren();
+}
+
+async function openGerber(proj) {
+  $('#home').classList.add('hidden'); $('#browse').classList.add('hidden');
+  $('#viewer').classList.remove('hidden');
+  markSub();
+  $('#v-save').classList.add('hidden');
+  $('#v-home').classList.add('hidden');
+  const ld = $('#loading'); $('#viewer').append(ld); $('#ld-text').textContent = 'Wczytywanie Gerberów…'; ld.classList.remove('hidden');
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    let set;
+    if (V.gcache && V.gcache.id === proj.id && V.gcache.updated === proj.updated) set = V.gcache.set;
+    else {
+      const files = [];
+      for (const f of Object.values(proj.files)) files.push({ name: f.name, text: await gunzipText(f.gz) });
+      set = buildGerberSet(files);
+      V.gcache = { id: proj.id, updated: proj.updated, set };
+    }
+    if (V.is3d) await set3D(false);
+    V.proj = proj; V.isGerber = true; V.gset = set; V.sel = null; V.schs = []; V.pcbs = []; V.pcbR = null;
+    V.gvis = Object.fromEntries(set.layers.map((l) => [l.id, defaultOn(l.L)]));
+    V.gview = LS.get('gview', 'layers');
+    $('#v-name').textContent = proj.name;
+    $('#v-pcb').classList.add('hidden');
+    $('#v-issues').classList.add('hidden');
+    $('#v-layout').classList.add('hidden');
+    $('#b3d').classList.add('hidden');
+    $('#gboard').classList.remove('hidden');
+    $('#p-pcb').classList.add('gerber');
+    $('#p-pcb .pempty').classList.add('hidden');
+    $('#panes').dataset.layout = 'pcb';
+    $('#v-layers').classList.remove('hidden');
+    $('#v-mode').classList.toggle('hidden', !set.hasX2);
+    if (!V.pcbPane) V.pcbPane = new Pane($('#p-pcb .phost'), { bg: 'transparent', onTap: onPcbTap, minW: 0.5, maxW: 5000 });
+    V.pcbPane.minW = 0.5; V.pcbPane.maxW = 5000;
+    drawGerber(true);
+    buildSearchIndex();
+    updateLayersUI();
+    renderGerberInfo(null);
+  } catch (e) {
+    console.error(e);
+    await message('Nie udało się otworzyć Gerberów', `<p>${esc(e.message || e)}</p>`);
+    showHome();
+  } finally { ld.classList.add('hidden'); }
+}
+
+function drawGerber(fit) {
+  const P = V.pcbPane, set = V.gset;
+  const board = V.gview === 'board';
+  $('#gboard').classList.toggle('on', board);
+  $('#gboard span').textContent = board ? 'Płytka' : 'Warstwy';
+  P.base.innerHTML = board ? renderBoard(set, V.flip ? 'bottom' : 'top') : renderLayers(set, V.flip);
+  P.ov.replaceChildren();
+  P.setFlip(V.flip);
+  applyGerberVis();
+  if (fit) requestAnimationFrame(() => gerberFit());
+}
+function gerberFit() { const b = V.gset.bbox; V.pcbPane.fitModel(b, 0.04); }
+function applyGerberVis() {
+  for (const g of V.pcbPane.root.querySelectorAll('[data-gl]')) g.style.display = V.gvis[g.dataset.gl] === false ? 'none' : '';
+}
+$('#gboard').onclick = () => { V.gview = V.gview === 'board' ? 'layers' : 'board'; LS.set('gview', V.gview); drawGerber(false); applySel(V.sel, 'none'); };
+
+function updateGerberLayersUI() {
+  const p = $('#layers-pop'), set = V.gset;
+  const board = V.gview === 'board';
+  const rows = set.layers.map((l) => `<div class="lrow${board ? ' dim' : ''}" data-gl="${l.id}"><span class="sw" style="background:${l.color}"></span><span class="lname">${esc(l.L.label)}<br><small>${esc(l.name)}</small></span><span class="tog ${V.gvis[l.id] ? 'on' : ''}"></span></div>`).join('');
+  p.innerHTML = `<div class="lrow" data-act="flip"><span class="lname"><b>Widok od strony Bottom</b></span><span class="tog ${V.flip ? 'on' : ''}"></span></div>
+    <div class="lrow" data-act="board"><span class="lname"><b>Widok „gotowa płytka”</b></span><span class="tog ${board ? 'on' : ''}"></span></div>
+    <div class="lrow" data-act="only-top"><span class="lname">Tylko Top</span></div>
+    <div class="lrow" data-act="only-bot"><span class="lname">Tylko Bottom</span></div>
+    <div class="lrow" data-act="all"><span class="lname">Domyślne warstwy</span></div>
+    <div class="lsep"></div>${rows}`;
+  $$('.lrow', p).forEach((r) => (r.onclick = () => {
+    const a = r.dataset.act;
+    if (a === 'flip') { setFlip(!V.flip); return; }
+    if (a === 'board') { $('#gboard').click(); updateGerberLayersUI(); return; }
+    if (a) {
+      for (const l of set.layers) {
+        const side = l.L.side;
+        if (a === 'all') V.gvis[l.id] = defaultOn(l.L);
+        else if (a === 'only-top') V.gvis[l.id] = side === 'bottom' || side === 'inner' ? false : side === 'top' ? defaultOn(l.L) : V.gvis[l.id];
+        else V.gvis[l.id] = side === 'top' || side === 'inner' ? false : side === 'bottom' ? defaultOn(l.L) : V.gvis[l.id];
+      }
+      if (V.gview === 'board') { V.gview = 'layers'; LS.set('gview', 'layers'); }
+      if (a === 'only-bot' && !V.flip) { setFlip(true); return; }
+      if (a === 'only-top' && V.flip) { setFlip(false); return; }
+      drawGerber(false);
+    } else { V.gvis[r.dataset.gl] = !V.gvis[r.dataset.gl]; applyGerberVis(); applySel(V.sel, 'none'); }
+    updateGerberLayersUI();
+  }));
+}
+
+let x2Hinted = false;
+function onGerberTap(client) {
+  const set = V.gset;
+  if (!set.hasX2) {
+    if (!x2Hinted) { x2Hinted = true; toast('Te Gerbery nie zawierają nazw sieci ani elementów (format X2), więc zaznaczanie nie jest dostępne.', 5000); }
+    return;
+  }
+  if (!client) return;
+  const offs = [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6], [12, 0], [-12, 0], [0, 12], [0, -12]];
+  let hitEl = null;
+  for (const [dx, dy] of offs) {
+    for (const el of document.elementsFromPoint(client.cx + dx, client.cy + dy)) {
+      if (!V.pcbPane.base.contains(el)) continue;
+      if (el.closest('.mk,.mkw,mask,defs')) continue;
+      const g = el.closest('[data-gl]'); if (g && g.style.display === 'none') continue;
+      const want = V.mode === 'net' ? (el.dataset.n != null ? el : null) : (el.dataset.c != null ? el : el.dataset.n != null ? el : null);
+      if (want) { hitEl = want; break; }
+    }
+    if (hitEl) break;
+  }
+  if (!hitEl) { applySel(null, 'pcb'); return; }
+  if (V.mode !== 'net' && hitEl.dataset.c != null) applySel({ type: 'gcomp', des: set.compNames[+hitEl.dataset.c] }, 'pcb');
+  else applySel({ type: 'gnet', name: set.netNames[+hitEl.dataset.n] }, 'pcb');
+}
+
+function highlightGerber(sel) {
+  const P = V.pcbPane, set = V.gset;
+  P.ov.replaceChildren();
+  P.base.classList.toggle('dim', !!sel);
+  if (!sel) return null;
+  let q;
+  if (sel.type === 'gnet') { const i = set.nets.get(sel.name); if (i == null) return null; q = `[data-n="${i}"]`; }
+  else if (sel.type === 'gcomp') { const i = set.comps.get(sel.des); if (i == null) return null; q = `[data-c="${i}"]`; }
+  else return null;
+  const groups = new Map();
+  let box = null;
+  for (const el of P.base.querySelectorAll(q)) {
+    if (el.closest('.mk,.mkw,mask,defs')) continue;
+    const g = el.closest('[data-gl]');
+    if (!g || g.style.display === 'none') continue;
+    let og = groups.get(g);
+    if (!og) { og = g.cloneNode(false); og.removeAttribute('mask'); P.ov.append(og); groups.set(g, og); }
+    og.append(el.cloneNode(true));
+    try { const b = el.getBBox(); const x1 = b.x, x2 = b.x + b.width, y1 = -(b.y + b.height), y2 = -b.y; box = box ? [Math.min(box[0], x1), Math.min(box[1], y1), Math.max(box[2], x2), Math.max(box[3], y2)] : [x1, y1, x2, y2]; } catch (e) { /* ignore */ }
+  }
+  return box;
+}
+
+function renderGerberInfo(sel) {
+  const box = $('#info');
+  if (!sel) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.classList.toggle('collapsed', INFO_COLLAPSED);
+  const set = V.gset, body = $('#i-body'), P = V.pcbPane;
+  const q = sel.type === 'gnet' ? `[data-n="${set.nets.get(sel.name)}"]` : `[data-c="${set.comps.get(sel.des)}"]`;
+  const els = [...P.base.querySelectorAll(q)].filter((el) => !el.closest('.mk,.mkw,mask,defs'));
+  const pins = new Set(), layers = new Set(), netsOfComp = new Map();
+  for (const el of els) {
+    if (el.dataset.p) pins.add(el.dataset.p);
+    const g = el.closest('[data-gl]'); if (g) { const l = set.layers.find((x) => String(x.id) === g.dataset.gl); if (l) layers.add(l.L.label); }
+    if (sel.type === 'gcomp' && el.dataset.p && el.dataset.n != null) netsOfComp.set(el.dataset.p, set.netNames[+el.dataset.n]);
+  }
+  const pinList = [...pins].sort(natCmp);
+  $('#i-kind').textContent = sel.type === 'gnet' ? 'Sieć' : 'Element';
+  $('#i-title').textContent = sel.type === 'gnet' ? sel.name : sel.des;
+  $('#i-sub').textContent = sel.type === 'gnet' ? `${pinList.length} ${pinList.length === 1 ? 'pad' : pinList.length < 5 ? 'pady' : 'padów'}` : `${pinList.length} ${pinList.length === 1 ? 'pad' : pinList.length < 5 ? 'pady' : 'padów'}`;
+  const rows = [['Warstwy', [...layers].join(', ') || '—']];
+  let chips = '';
+  if (sel.type === 'gnet') chips = pinList.map((p) => `<button class="pchip" data-gc="${esc(p.split('.')[0])}"><b>${esc(p)}</b></button>`).join('');
+  else chips = pinList.map((p) => { const n = netsOfComp.get(p); return `<button class="pchip"${n ? ` data-gn="${esc(n)}"` : ''}><b>${esc(p.split('.').slice(1).join('.') || p)}</b><span>${esc(n || '—')}</span></button>`; }).join('');
+  body.innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` + (chips ? `<div class="sect">${sel.type === 'gnet' ? 'Pady' : 'Pady → sieci'}</div><div class="chips">${chips}</div>` : '');
+  $$('[data-gc]', body).forEach((b) => (b.onclick = () => applySel({ type: 'gcomp', des: b.dataset.gc }, 'none')));
+  $$('[data-gn]', body).forEach((b) => (b.onclick = () => applySel({ type: 'gnet', name: b.dataset.gn }, 'none')));
+}
 
 // ---------------- share target inbox ----------------
 async function checkShareInbox() {

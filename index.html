@@ -45,7 +45,7 @@
       <button id="add-dir" class="btn primary big"><svg><use href="#i-folder"/></svg>Otwórz folder</button>
       <button id="add" class="btn big"><svg><use href="#i-plus"/></svg>Wybierz pliki</button>
     </div>
-    <p class="hint" id="hint-dir"><b>Otwórz folder</b> z projektem, np. w Nextcloudzie. Zobaczysz w nim tylko pliki .PrjPcb, .SchDoc i .PcbDoc. Po wybraniu projektu aplikacja wczyta tylko schematy i płytki wymienione w pliku .PrjPcb. Pojedynczy schemat lub płytkę otworzysz do podglądu bez zapisywania.</p>
+    <p class="hint" id="hint-dir"><b>Otwórz folder</b> z projektem, np. w Nextcloudzie. Zobaczysz w nim tylko pliki .PrjPcb, .SchDoc i .PcbDoc. Po wybraniu projektu aplikacja wczyta tylko schematy i płytki wymienione w pliku .PrjPcb. Pojedynczy schemat lub płytkę otworzysz do podglądu bez zapisywania. Gerbery (także z folderu <i>Project Outputs</i>) pojawią się na liście jako osobna pozycja.</p>
     <p class="hint hidden" id="hint-files">Wybierz plik <b>.PrjPcb</b> razem z jego schematami i płytką. Aby zaznaczyć kilka plików, <b>przytrzymaj</b> pierwszy z nich w oknie wyboru. Pojedynczy schemat lub płytkę otworzysz do podglądu bez zapisywania.</p>
     <div id="plist" class="plist"></div>
     <div id="empty" class="empty hidden">
@@ -99,7 +99,7 @@
     </section>
     <section class="pane dark" id="p-pcb">
       <div class="phost"></div>
-      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Top</span></button><button id="b3d" class="chip"><svg><use href="#i-cube"/></svg><span>3D</span></button></div>
+      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Top</span></button><button id="gboard" class="chip hidden"><svg><use href="#i-layers"/></svg><span>Warstwy</span></button><button id="b3d" class="chip"><svg><use href="#i-cube"/></svg><span>3D</span></button></div>
       <div class="v3dhost"></div>
       <div class="v3dmsg hidden"><div class="spin"></div><span></span></div>
       <div class="ptools tr"><button class="fab" data-fit="pcb" aria-label="Dopasuj"><svg><use href="#i-fit"/></svg></button></div>

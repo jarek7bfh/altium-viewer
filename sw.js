@@ -1,10 +1,10 @@
 // Altium Viewer service worker: offline app shell + Android share target
-const VERSION = 'av-v10';
+const VERSION = 'av-v0.4.0'
 const SHELL = [
   './', './index.html', './app.css', './manifest.webmanifest', './vendor/cfb.min.js',
   './js/app.js', './js/util.js', './js/schparse.js', './js/pcbparse.js', './js/netlink.js',
   './js/schrender.js', './js/pcbrender.js', './js/pane.js', './js/hit.js', './js/store.js',
-  './js/view3d.js', './js/step-worker.js', './vendor/three.module.min.js', './vendor/OrbitControls.js',
+  './js/view3d.js', './js/step-worker.js', './js/gerber.js', './js/gerberrender.js', './vendor/three.module.min.js', './vendor/OrbitControls.js',
   './icons/icon-192.png', './icons/icon-512.png',
 ];
 self.addEventListener('install', (e) => {
