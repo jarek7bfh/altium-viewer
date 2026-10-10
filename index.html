@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Altium Viewer</title>
+<meta name="description" content="Przeglądarka schematów i PCB Altium na tablet – z cross-selection.">
+<meta name="theme-color" content="#0f1217">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+<script src="vendor/cfb.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 3v18" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M9 7L3 17h6z" fill="currentColor"/><path d="M15 7l6 10h-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 6V3M12 6V3M15 6V3M9 21v-3M12 21v-3M15 21v-3M6 9H3M6 12H3M6 15H3M21 9h-3M21 12h-3M21 15h-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="6" r="2.2" fill="currentColor"/><circle cx="19" cy="18" r="2.2" fill="currentColor"/><path d="M7 12h5V6h5M12 12v6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+
+<!-- ===== Projects ===== -->
+<div id="home" class="screen">
+  <header class="hbar">
+    <div class="brand"><svg class="logo"><use href="#i-chip"/></svg><span>Altium Viewer</span></div>
+  </header>
+  <main class="hmain">
+    <button id="add" class="btn primary big"><svg><use href="#i-plus"/></svg>Dodaj lub zaktualizuj projekt</button>
+    <p class="hint">Wybierz plik <b>.PrjPcb</b> razem ze schematami <b>.SchDoc</b> i płytką <b>.PcbDoc</b>, np. z Nextclouda w oknie wyboru plików. Na tablecie zapisywane są tylko dane potrzebne do podglądu. Historia, wyjścia produkcyjne, pliki tymczasowe i modele 3D są pomijane.</p>
+    <div id="plist" class="plist"></div>
+    <div id="empty" class="empty hidden">
+      <div class="empty-art"><svg><use href="#i-chip"/></svg></div>
+      <p>Nie masz jeszcze żadnych projektów na tym tablecie.</p>
+    </div>
+  </main>
+  <footer class="hfoot">
+    <span id="usage"></span>
+    <button id="del-all" class="btn ghost danger hidden"><svg><use href="#i-trash"/></svg>Usuń wszystkie</button>
+  </footer>
+</div>
+
+<!-- ===== Viewer ===== -->
+<div id="viewer" class="screen hidden">
+  <header class="vbar">
+    <button id="v-back" class="ib" aria-label="Projekty"><svg><use href="#i-back"/></svg></button>
+    <div class="vtitle">
+      <span id="v-name"></span>
+      <select id="v-pcb" class="hidden" aria-label="Płytka"></select>
+    </div>
+    <div class="seg" id="v-layout" role="group" aria-label="Układ">
+      <button data-v="sch">Schemat</button><button data-v="both">Oba</button><button data-v="pcb">PCB</button>
+    </div>
+    <div class="seg" id="v-mode" role="group" aria-label="Zaznaczanie">
+      <button data-m="comp" title="Zaznaczaj elementy"><svg><use href="#i-chip"/></svg><span>Element</span></button>
+      <button data-m="net" title="Zaznaczaj sieci"><svg><use href="#i-net"/></svg><span>Sieć</span></button>
+    </div>
+    <button id="v-issues" class="ib warn hidden" aria-label="Rozbieżności"><svg><use href="#i-warn"/></svg><b id="v-issues-n"></b></button>
+    <button id="v-search" class="ib" aria-label="Szukaj"><svg><use href="#i-search"/></svg></button>
+    <button id="v-layers" class="ib" aria-label="Warstwy PCB"><svg><use href="#i-layers"/></svg></button>
+  </header>
+  <main id="panes" data-layout="both">
+    <section class="pane" id="p-sch">
+      <div class="phost"></div>
+      <div class="ptools tl"><div id="sheet-tabs" class="tabs"></div></div>
+      <div class="ptools tr"><button class="fab" data-fit="sch" aria-label="Dopasuj"><svg><use href="#i-fit"/></svg></button></div>
+      <div class="pempty hidden">Brak schematu w projekcie</div>
+    </section>
+    <section class="pane dark" id="p-pcb">
+      <div class="phost"></div>
+      <div class="ptools tl"><button id="flip" class="chip"><svg><use href="#i-flip"/></svg><span>Góra</span></button></div>
+      <div class="ptools tr"><button class="fab" data-fit="pcb" aria-label="Dopasuj"><svg><use href="#i-fit"/></svg></button></div>
+      <div class="pempty hidden">Brak płytki w projekcie</div>
+    </section>
+  </main>
+  <aside id="info" class="hidden">
+    <div class="ihead">
+      <div class="ititle"><span id="i-kind"></span><h2 id="i-title"></h2><span id="i-sub"></span></div>
+      <button id="i-collapse" class="ib sm" aria-label="Zwiń">⌄</button>
+      <button id="i-close" class="ib sm" aria-label="Wyczyść zaznaczenie"><svg><use href="#i-close"/></svg></button>
+    </div>
+    <div id="i-body" class="ibody"></div>
+  </aside>
+  <div id="search-pop" class="pop hidden">
+    <div class="sbox"><svg><use href="#i-search"/></svg><input id="q" type="search" placeholder="Element (R12) lub sieć (GND)…" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+    <ul id="q-res"></ul>
+  </div>
+  <div id="layers-pop" class="pop hidden"></div>
+  <div id="loading" class="loading hidden"><div class="spin"></div><span>Wczytywanie…</span></div>
+</div>
+
+<!-- ===== Dialogs ===== -->
+<dialog id="dlg-delete">
+  <h3 id="d-title">Usunąć projekt z tabletu?</h3>
+  <p id="d-text"></p>
+  <div class="dact">
+    <button class="btn ghost" id="d-cancel">Anuluj</button>
+    <button class="btn hold" id="d-hold"><span class="fill"></span><span class="lbl">Przytrzymaj, aby usunąć</span></button>
+  </div>
+</dialog>
+<dialog id="dlg-msg">
+  <h3 id="m-title"></h3>
+  <div id="m-body"></div>
+  <div class="dact"><button class="btn primary" id="m-ok">OK</button></div>
+</dialog>
+<input type="file" id="picker" multiple hidden>
+<div id="toast" class="toast hidden"></div>
+</body>
+</html>

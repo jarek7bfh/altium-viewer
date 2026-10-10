@@ -1,0 +1,208 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1217;
+  --surface: #171b22;
+  --surface2: #1f242d;
+  --line: #2a313c;
+  --text: #e7eaf0;
+  --muted: #8f98a8;
+  --accent: #38bdf8;
+  --accent-ink: #04212f;
+  --danger: #f05252;
+  --warn: #f5b942;
+  --sch-bg: #c9cbd0;
+  --pcb-bg: #090c10;
+  --hl: #0ea5e9;
+  --r: 12px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+body { overflow: hidden; overscroll-behavior: none; }
+button { font: inherit; color: inherit; }
+svg { flex: none; }
+.hidden { display: none !important; }
+.screen { position: fixed; inset: 0; display: flex; flex-direction: column; }
+
+/* ---------- buttons ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface2); cursor: pointer; font-weight: 550; user-select: none; }
+.btn svg { width: 20px; height: 20px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.big { min-height: 56px; font-size: 17px; padding: 0 22px; border-radius: 14px; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--danger); }
+.btn:active { transform: translateY(1px); }
+.ib { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 44px; height: 44px; padding: 0 8px; border: 0; background: transparent; border-radius: 10px; cursor: pointer; }
+.ib svg { width: 22px; height: 22px; }
+.ib.sm { min-width: 36px; height: 36px; }
+.ib:active, .ib.on { background: var(--surface2); }
+.ib.warn { color: var(--warn); }
+
+/* ---------- home ---------- */
+.hbar { display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+.logo { width: 28px; height: 28px; color: var(--accent); }
+.hmain { flex: 1; overflow: auto; padding: 20px; max-width: 900px; width: 100%; margin: 0 auto; }
+.hint { color: var(--muted); margin: 12px 2px 22px; max-width: 70ch; }
+.plist { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 14px 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: start; }
+.card .open { all: unset; cursor: pointer; display: block; min-height: 44px; }
+.card h3 { margin: 0 0 2px; font-size: 17px; word-break: break-word; }
+.card .meta { color: var(--muted); font-size: 13px; }
+.files { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--line); color: var(--text); }
+.fchip.miss { color: var(--muted); border-style: dashed; background: transparent; }
+.fchip i { font-style: normal; color: var(--muted); margin-left: 4px; }
+.cact { display: flex; gap: 4px; }
+.cact .ib { color: var(--muted); }
+.cact .ib.del:active { color: var(--danger); }
+.empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+.empty-art svg { width: 64px; height: 64px; opacity: .35; }
+.hfoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px calc(10px + var(--safe-b)); border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+/* ---------- viewer bar ---------- */
+.vbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--surface); min-height: 56px; }
+.vtitle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#v-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#v-pcb { max-width: 220px; height: 36px; background: var(--surface2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; }
+.seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 2px; }
+.seg button { border: 0; background: transparent; min-height: 38px; padding: 0 12px; border-radius: 8px; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-weight: 550; }
+.seg button svg { width: 18px; height: 18px; }
+.seg button.on { background: var(--surface2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 1px 3px rgba(0,0,0,.4); }
+#v-mode button.on { color: var(--accent); }
+@media (max-width: 860px) { .seg button { padding: 0 9px; } #v-mode span { display: none; } }
+@media (max-width: 620px) { #v-layout button[data-v="both"] { display: none; } }
+
+/* ---------- panes ---------- */
+#panes { flex: 1; display: flex; min-height: 0; position: relative; }
+@media (orientation: portrait) { #panes { flex-direction: column; } }
+.pane { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--sch-bg); }
+.pane.dark { background: var(--pcb-bg); }
+#p-sch + #p-pcb { border-left: 1px solid var(--line); }
+@media (orientation: portrait) { #p-sch + #p-pcb { border-left: 0; border-top: 1px solid var(--line); } }
+#panes[data-layout="sch"] #p-pcb, #panes[data-layout="pcb"] #p-sch { display: none; }
+.phost { position: absolute; inset: 0; }
+.pane-svg { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; will-change: transform; }
+.ptools { position: absolute; display: flex; gap: 6px; z-index: 2; pointer-events: none; }
+.ptools > * { pointer-events: auto; }
+.ptools.tl { top: 8px; left: 8px; right: 60px; flex-wrap: wrap; }
+.ptools.tr { right: 8px; top: 8px; }
+.fab { width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--line); background: rgba(23,27,34,.88); backdrop-filter: blur(6px); display: grid; place-items: center; cursor: pointer; }
+.fab svg { width: 22px; height: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(23,27,34,.88); backdrop-filter: blur(6px); cursor: pointer; font-size: 13.5px; font-weight: 550; }
+.chip svg { width: 18px; height: 18px; }
+.chip.on { color: var(--accent); border-color: var(--accent); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs .chip { color: #1b2230; background: rgba(255,255,255,.85); border-color: #9aa3b2; }
+.tabs .chip.on { background: #1b2230; color: #fff; border-color: #1b2230; }
+.pempty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--bg); }
+
+/* ---------- schematic drawing ---------- */
+#p-sch .zone { font: 8px Arial, sans-serif; fill: #333; text-anchor: middle; dominant-baseline: central; }
+#p-sch .base { transition: opacity .15s; }
+#p-sch .base.dim { opacity: .28; }
+#p-sch .ov .hl polyline, #p-sch .ov .hl line, #p-sch .ov .hl path { stroke: var(--hl) !important; }
+#p-sch .ov polyline.hl { stroke: var(--hl); stroke-width: 2.4; }
+#p-sch .ov .hl text, #p-sch .ov text.hl { fill: #0369a1 !important; font-weight: 700; }
+#p-sch .ov .hl.pin line { stroke-width: 2; }
+.selbox { fill: rgba(14,165,233,.10); stroke: var(--hl); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-dasharray: 6 4; }
+
+/* ---------- PCB drawing ---------- */
+#p-pcb text { stroke: none; }
+#p-pcb .ol { fill: #10241a; stroke: #d7dbe2; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+#p-pcb .tr { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+#p-pcb g[data-l=tcu] { fill: #d23a3a; stroke: #d23a3a; }
+#p-pcb g[data-l=bcu] { fill: #3d6fd6; stroke: #3d6fd6; }
+#p-pcb g[data-l=inner] { fill: #3fae6a; stroke: #3fae6a; }
+#p-pcb g[data-l=tpour] { fill: #d23a3a; stroke: #d23a3a; opacity: .38; }
+#p-pcb g[data-l=bpour] { fill: #3d6fd6; stroke: #3d6fd6; opacity: .38; }
+#p-pcb .flip g[data-l=tpour] { opacity: .3; }
+#p-pcb g[data-l=multi] { fill: #c9b26a; stroke: none; }
+#p-pcb g[data-l=via] { fill: #a9b0bb; stroke: none; }
+#p-pcb g[data-l=hole] { fill: #07090c; stroke: none; }
+#p-pcb g[data-l=hole] .np { fill: #07090c; stroke: #8a94a3; stroke-width: 1; vector-effect: non-scaling-stroke; }
+#p-pcb g[data-l=tsilk] { fill: #f1e15a; stroke: #f1e15a; }
+#p-pcb g[data-l=bsilk] { fill: #c2a640; stroke: #c2a640; }
+#p-pcb g[data-l=mech] { fill: none; stroke: #b27cf7; }
+#p-pcb g[data-l=mech] .rg, #p-pcb g[data-l=mech] .fl { fill: #b27cf7; fill-opacity: .25; }
+#p-pcb g[data-l=keepout] { fill: #f0f; stroke: #f0f; opacity: .6; }
+#p-pcb g[data-l=outline] { }
+#p-pcb .pb { display: none; }
+#p-pcb .flip .pb { display: inline; }
+#p-pcb .flip .pt { display: none; }
+#p-pcb .base.dim { opacity: .22; }
+#p-pcb .ov g[data-l] { opacity: 1; }
+#p-pcb .ov g[data-l=tpour], #p-pcb .ov g[data-l=bpour] { opacity: .75; }
+#p-pcb .ov .pd, #p-pcb .ov .vi { stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+#p-pcb .ov g[data-l=tcu] { fill: #ff5a4f; stroke: #ff5a4f; }
+#p-pcb .ov g[data-l=bcu] { fill: #5b8cff; stroke: #5b8cff; }
+#p-pcb .selbox { stroke: #7dd3fc; fill: rgba(56,189,248,.12); }
+/* layer visibility */
+.hide-mech g[data-l=mech], .hide-bpour g[data-l=bpour], .hide-bcu g[data-l=bcu], .hide-inner g[data-l=inner],
+.hide-tpour g[data-l=tpour], .hide-tcu g[data-l=tcu], .hide-multi g[data-l=multi], .hide-via g[data-l=via],
+.hide-hole g[data-l=hole], .hide-keepout g[data-l=keepout], .hide-bsilk g[data-l=bsilk], .hide-tsilk g[data-l=tsilk],
+.hide-outline g[data-l=outline] { display: none; }
+
+/* ---------- info panel ---------- */
+#info { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(12px + var(--safe-b)); width: min(620px, calc(100% - 24px)); max-height: 36vh; display: flex; flex-direction: column; background: rgba(23,27,34,.97); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.5); z-index: 10; }
+#info.collapsed .ibody { display: none; }
+#info.collapsed #i-collapse { transform: rotate(180deg); }
+.ihead { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 16px; }
+.ititle { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+#i-kind { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; }
+#i-title { margin: 0; font-size: 19px; }
+#i-sub { color: var(--muted); }
+#i-collapse { font-size: 20px; color: var(--muted); }
+.ibody { overflow: auto; padding: 0 16px 14px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; margin: 2px 0 10px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-word; }
+.sect { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 10px 0 6px; font-weight: 650; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pchip { display: inline-flex; align-items: baseline; gap: 6px; min-height: 34px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface2); cursor: pointer; font-size: 13.5px; }
+.pchip b { font-weight: 650; }
+.pchip i { font-style: normal; color: var(--muted); font-size: 12.5px; }
+.pchip:active { border-color: var(--accent); }
+.note { color: var(--muted); font-size: 13px; }
+
+/* ---------- popovers ---------- */
+.pop { position: absolute; top: 60px; right: 8px; width: min(380px, calc(100% - 16px)); max-height: calc(100% - 76px); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.55); z-index: 20; display: flex; flex-direction: column; overflow: hidden; }
+.sbox { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.sbox svg { width: 20px; height: 20px; color: var(--muted); }
+#q { flex: 1; height: 42px; background: transparent; border: 0; outline: 0; color: var(--text); font-size: 17px; }
+#q-res { list-style: none; margin: 0; padding: 4px; overflow: auto; }
+#q-res li { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 10px; border-radius: 9px; cursor: pointer; }
+#q-res li:active, #q-res li.act { background: var(--surface2); }
+#q-res li svg { width: 18px; height: 18px; color: var(--muted); }
+#q-res li b { font-weight: 650; }
+#q-res li span { color: var(--muted); font-size: 13px; margin-left: auto; text-align: right; }
+#layers-pop { padding: 6px; overflow: auto; }
+.lrow { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 4px 10px; border-radius: 9px; cursor: pointer; user-select: none; }
+.lrow:active { background: var(--surface2); }
+.lrow .sw { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+.lrow .lname { flex: 1; }
+.tog { width: 44px; height: 26px; border-radius: 13px; background: var(--line); position: relative; flex: none; transition: background .15s; }
+.tog::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #cfd5df; transition: transform .15s; }
+.tog.on { background: var(--accent); }
+.tog.on::after { transform: translateX(18px); background: #fff; }
+.lsep { height: 1px; background: var(--line); margin: 6px 4px; }
+
+/* ---------- dialogs ---------- */
+dialog { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 18px; padding: 20px; width: min(460px, calc(100% - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+dialog::backdrop { background: rgba(0,0,0,.55); }
+dialog h3 { margin: 0 0 8px; font-size: 19px; }
+dialog p { color: #c4cad4; margin: 0 0 18px; }
+#m-body { color: #c4cad4; max-height: 50vh; overflow: auto; margin-bottom: 16px; }
+#m-body ul { margin: 6px 0 10px; padding-left: 20px; }
+#m-body .small { font-size: 13px; color: var(--muted); }
+.dact { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.btn.hold { position: relative; overflow: hidden; background: #3a1d20; border-color: #6b2a2f; color: #ffd9d9; min-width: 220px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.btn.hold .fill { position: absolute; inset: 0; background: var(--danger); transform-origin: left; transform: scaleX(0); }
+.btn.hold.go .fill { transform: scaleX(1); transition: transform 1.2s linear; }
+.btn.hold .lbl { position: relative; }
+.btn.hold.go .lbl { color: #fff; }
+
+.loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(15,18,23,.7); z-index: 30; color: var(--muted); }
+.spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: sp .8s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.toast { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); background: #263040; color: var(--text); padding: 10px 16px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 50; max-width: calc(100% - 32px); }
