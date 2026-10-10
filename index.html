@@ -62,7 +62,7 @@
 <!-- ===== Folder ===== -->
 <div id="browse" class="screen hidden">
   <header class="vbar">
-    <button id="b-back" class="ib" aria-label="Wróć"><svg><use href="#i-back"/></svg></button>
+    <button id="b-back" class="ib" aria-label="Lista projektów" title="Lista projektów"><svg><use href="#i-home"/></svg></button>
     <div class="vtitle"><svg class="fic"><use href="#i-folder"/></svg><span id="b-name"></span></div>
     <button id="b-repick" class="btn ghost">Inny folder</button>
   </header>
@@ -124,8 +124,8 @@
 
 <div id="waitdir" class="loading hidden">
   <div class="spin"></div>
-  <b>Wybierz folder w oknie systemowym…</b><b>Czekam na listę plików: <span id="wd-sec">0</span> s</b>
-  <p class="wd-note">Android i Nextcloud najpierw przeglądają cały folder razem z podfolderami (History, Project Outputs). Przy dużej historii może to potrwać nawet minutę. Aplikacja pobierze potem tylko pliki projektu, który wybierzesz.</p>
+  <b>Pobieram listę plików z folderu…</b>
+  <p class="wd-note">Android i Nextcloud najpierw przeglądają cały folder razem z podfolderami (History, Project Outputs). Przy dużej historii może to chwilę potrwać. Aplikacja pobierze potem tylko pliki projektu, który wybierzesz.</p>
   <button id="wd-cancel" class="btn ghost">Anuluj</button>
 </div>
 

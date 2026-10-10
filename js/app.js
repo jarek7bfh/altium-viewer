@@ -18,7 +18,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('av.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
 };
 const NS = 'http://www.w3.org/2000/svg';
-export const APP_VERSION = '9';
+export const APP_VERSION = '10';
 
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -96,18 +96,13 @@ const DIR_OK = 'webkitdirectory' in document.createElement('input') && !/iPhone|
 if (!DIR_OK) { $('#add-dir').classList.add('hidden'); $('#hint-dir').classList.add('hidden'); $('#hint-files').classList.remove('hidden'); $('#add').classList.add('primary'); }
 $('#add').onclick = () => { pickTarget = null; $('#picker').click(); };
 
-let wdTimer = null;
 // The waiting screen is shown BEFORE the system picker opens, so it is already there when Android returns
 // to the page while it is still listing the folder. 'change' or 'cancel' hides it.
 function pickDir() {
-  const w = $('#waitdir');
-  clearInterval(wdTimer);
-  const t1 = Date.now();
-  $('#wd-sec').textContent = '0'; w.classList.remove('hidden');
-  wdTimer = setInterval(() => { $('#wd-sec').textContent = Math.round((Date.now() - t1) / 1000); }, 500);
+  $('#waitdir').classList.remove('hidden');
   $('#picker-dir').click();
 }
-function hideWait() { clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); }
+function hideWait() { $('#waitdir').classList.add('hidden'); }
 $('#wd-cancel').onclick = hideWait;
 $('#picker-dir').addEventListener('cancel', hideWait);
 $('#add-dir').onclick = () => { pickTarget = null; pickDir(); };
