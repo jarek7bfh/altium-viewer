@@ -1,5 +1,5 @@
 // Altium Viewer service worker: offline app shell + Android share target
-const VERSION = 'av-v4';
+const VERSION = 'av-v5';
 const SHELL = [
   './', './index.html', './app.css', './manifest.webmanifest', './vendor/cfb.min.js',
   './js/app.js', './js/util.js', './js/schparse.js', './js/pcbparse.js', './js/netlink.js',
@@ -7,7 +7,7 @@ const SHELL = [
   './icons/icon-192.png', './icons/icon-512.png',
 ];
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VERSION && k !== 'av-share-inbox').map((k) => caches.delete(k)))).then(() => self.clients.claim()));

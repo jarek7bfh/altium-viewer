@@ -237,3 +237,5 @@ dialog p { color: #c4cad4; margin: 0 0 18px; }
 #waitdir .wd-note { color: var(--muted); max-width: 46ch; margin: 0; }
 #wd-sec { font-variant-numeric: tabular-nums; }
 .bsum { color: var(--muted); font-size: 13px; margin: 0 2px 4px; }
+
+.ver { color: var(--muted); opacity: .7; margin-left: auto; padding-left: 12px; }

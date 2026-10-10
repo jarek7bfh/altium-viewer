@@ -123,7 +123,8 @@ export class Pane {
     this._apply();
   }
 
-  _local(e) { const r = this.svg.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  // measure against the untransformed host (the svg itself is CSS-scaled during a gesture)
+  _local(e) { const r = this.host.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
   _bind() {
     const el = this.svg;

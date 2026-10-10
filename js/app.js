@@ -18,6 +18,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('av.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
 };
 const NS = 'http://www.w3.org/2000/svg';
+export const APP_VERSION = '5';
 
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -89,27 +90,19 @@ function confirmDelete(title, text, action) {
 const DIR_OK = 'webkitdirectory' in document.createElement('input') && !/iPhone|iPad/.test(navigator.userAgent);
 if (!DIR_OK) { $('#add-dir').classList.add('hidden'); $('#hint-dir').classList.add('hidden'); $('#hint-files').classList.remove('hidden'); $('#add').classList.add('primary'); }
 $('#add').onclick = () => { pickTarget = null; $('#picker').click(); };
-let wdTimer = null, picking = false;
+let wdTimer = null;
+// The waiting screen is shown BEFORE the system picker opens, so it is already there when Android returns
+// to the page while it is still listing the folder. 'change' or 'cancel' hides it.
 function pickDir() {
   const w = $('#waitdir');
   clearInterval(wdTimer);
-  picking = true;
-  const t0 = Date.now();
-  let shown = false;
-  // show the waiting screen once the system picker has returned to the page (unless cancel/change already came)
-  const show = () => setTimeout(() => {
-    if (shown || !picking) return; shown = true;
-    const t1 = Date.now();
-    $('#wd-sec').textContent = '0'; w.classList.remove('hidden');
-    wdTimer = setInterval(() => { $('#wd-sec').textContent = Math.round((Date.now() - t1) / 1000); }, 500);
-  }, 500);
-  const onFocus = () => { window.removeEventListener('focus', onFocus); if (Date.now() - t0 > 300) show(); };
-  setTimeout(() => window.addEventListener('focus', onFocus), 50);
-  document.addEventListener('visibilitychange', function vis() { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', vis); show(); } });
+  const t1 = Date.now();
+  $('#wd-sec').textContent = '0'; w.classList.remove('hidden');
+  wdTimer = setInterval(() => { $('#wd-sec').textContent = Math.round((Date.now() - t1) / 1000); }, 500);
   $('#picker-dir').click();
 }
-function hideWait() { picking = false; clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); }
-$('#wd-cancel').onclick = () => { clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); };
+function hideWait() { clearInterval(wdTimer); $('#waitdir').classList.add('hidden'); }
+$('#wd-cancel').onclick = hideWait;
 $('#picker-dir').addEventListener('cancel', hideWait);
 $('#add-dir').onclick = () => { pickTarget = null; pickDir(); };
 $('#picker-dir').onchange = async (e) => {
@@ -749,7 +742,12 @@ async function checkShareInbox() {
 
 // ---------------- boot ----------------
 if ('serviceWorker' in navigator && location.protocol !== 'file:' && document.querySelector('link[rel=manifest]')) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  // a new version took over -> reload once so the new files are used right away
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('./sw.js').then((r) => r.update()).catch(() => {});
 }
+$('#ver').textContent = 'wersja ' + APP_VERSION;
 showHome().then(() => checkShareInbox());
 window.__av = V; // debug
