@@ -42,9 +42,15 @@ export const putProject = (p) => tx('readwrite', (st) => req(st.put(p)));
 export const deleteProject = (id) => tx('readwrite', (st) => req(st.delete(id)));
 export const deleteAllProjects = () => tx('readwrite', (st) => req(st.clear()));
 
+let SAVE3D = true;
+export function setSave3D(v) { SAVE3D = !!v; }
+
 export function projectSize(p) {
   let n = 0;
-  for (const f of Object.values(p.files || {})) for (const s of Object.values(f.streams || {})) n += s.byteLength;
+  for (const f of Object.values(p.files || {})) {
+    for (const s of Object.values(f.streams || {})) n += s.byteLength;
+    for (const m of Object.values(f.meshes || {})) n += m.pos.byteLength + m.col.byteLength + m.idx.byteLength;
+  }
   return n + (p.prjText ? p.prjText.length : 0);
 }
 
@@ -113,7 +119,17 @@ function extractStreams(buf, kind) {
   }
   if (!streams['Board6/Data']) throw new Error('brak danych płytki – to nie wygląda na PCB Altium');
   const p = parsePcb(get);
-  return { streams, info: { components: p.components.length, nets: p.nets.length } };
+  // embedded STEP models (zlib-compressed) – only those used by component bodies on this board
+  let models3d = 0;
+  if (SAVE3D) {
+    const used = new Set(p.bodies.filter((b) => b.type === 1 && b.modelId).map((b) => b.modelId));
+    for (const m of p.models) {
+      if (!used.has(m.id)) continue;
+      const e = window.CFB.find(cf, 'Root Entry/Models/' + m.index);
+      if (e && e.content && e.content.length) { streams['Models/' + m.index] = new Uint8Array(e.content).slice(); models3d++; }
+    }
+  }
+  return { streams, info: { components: p.components.length, nets: p.nets.length, models3d } };
 }
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'p' + Date.now() + Math.random().toString(36).slice(2));

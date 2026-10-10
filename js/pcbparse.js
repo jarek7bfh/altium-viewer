@@ -4,7 +4,7 @@ import { Reader, textRecords32, milVal, num, bool, parseProps, bin } from './uti
 export const PCB_STREAMS = [
   'Board6/Data', 'Components6/Data', 'Nets6/Data', 'Tracks6/Data', 'Arcs6/Data', 'Vias6/Data',
   'Pads6/Data', 'Fills6/Data', 'Regions6/Data', 'ShapeBasedRegions6/Data', 'Texts6/Data',
-  'WideStrings6/Data', 'Polygons6/Data', 'Classes6/Data',
+  'WideStrings6/Data', 'Polygons6/Data', 'Classes6/Data', 'ComponentBodies6/Data', 'Models/Data',
 ];
 
 // Altium layer ids
@@ -249,6 +249,43 @@ function parseText(r, wide) {
   return { layer, comp: comp === NONE16 ? -1 : comp, x, y, h, rot, mirrored, sw, isComment, isDesignator, fontType, bold, italic, font, inverted, text };
 }
 
+function parseBody(r) {
+  r.u8_(); // 12
+  r.sub();
+  const layer = r.u8_();
+  r.skip(6);
+  const comp = r.u16();
+  r.skip(9);
+  const q = readPropsBlock(r);
+  const pts = [];
+  if (r.remaining() >= 4) {
+    const nv = r.u32();
+    for (let i = 0; i < nv && r.remaining() >= 16; i++) pts.push({ x: r.f64() / 10000, y: r.f64() / 10000 });
+  }
+  r.endSub();
+  return {
+    layer, comp: comp === NONE16 ? -1 : comp, pts,
+    side: num(q.BODYPROJECTION) === 1 ? 'BOTTOM' : 'TOP',
+    type: num(q['MODEL.MODELTYPE'], 0), modelId: q.MODELID || '', modelName: q['MODEL.NAME'] || '',
+    x: milVal(q['MODEL.2D.X']), y: milVal(q['MODEL.2D.Y']), rot2d: num(q['MODEL.2D.ROTATION']),
+    rx: num(q['MODEL.3D.ROTX']), ry: num(q['MODEL.3D.ROTY']), rz: num(q['MODEL.3D.ROTZ']), dz: milVal(q['MODEL.3D.DZ']),
+    standoff: milVal(q.STANDOFFHEIGHT), height: milVal(q.OVERALLHEIGHT),
+    color: q.BODYCOLOR3D != null ? num(q.BODYCOLOR3D) : null, opacity: q.BODYOPACITY3D != null ? num(q.BODYOPACITY3D, 1) : 1,
+    cylR: milVal(q['MODEL.CYLINDER.RADIUS']), cylH: milVal(q['MODEL.CYLINDER.HEIGHT']), sphR: milVal(q['MODEL.SPHERE.RADIUS']),
+  };
+}
+
+/** board thickness (mil) from layer stack: copper + dielectrics between first and last copper layer */
+function boardThickness(b) {
+  const L = [];
+  for (let i = 0; b['V9_STACK_LAYER' + i + '_NAME'] != null; i++) L.push({ cop: b['V9_STACK_LAYER' + i + '_COPTHICK'], diel: b['V9_STACK_LAYER' + i + '_DIELHEIGHT'] });
+  const first = L.findIndex((l) => l.cop != null), last = L.length - 1 - [...L].reverse().findIndex((l) => l.cop != null);
+  if (first < 0) return 62.99;
+  let t = 0;
+  for (let i = first; i <= last; i++) t += milVal(L[i].cop) + milVal(L[i].diel);
+  return t > 1 ? t : 62.99;
+}
+
 function parseOutline(p, prefix = '') {
   // Board6 / Polygons6 vertex list: KIND{i},VX{i},VY{i},CX{i},CY{i},SA{i},EA{i},R{i}
   const v = [];
@@ -319,6 +356,9 @@ export function parsePcb(get) {
     return { name: p.NAME, kind: num(p.KIND), members: m, superclass: bool(p.SUPERCLASS) };
   });
 
+  const bodies = records(get('ComponentBodies6/Data'), parseBody);
+  const models = textRecords32(get('Models/Data')).map((p, i) => ({ index: i, id: p.ID || '', name: p.NAME || '', checksum: p.CHECKSUM || '' }));
+
   // comment text per component (from texts with isComment)
   for (const t of texts) {
     if (t.comp >= 0 && components[t.comp]) {
@@ -327,5 +367,5 @@ export function parsePcb(get) {
     }
   }
 
-  return { outline, stack, nets, components, tracks, arcs, vias, pads, fills, regions, sregions, texts, polygons, classes, board: { originX: milVal(boardP.ORIGINX), originY: milVal(boardP.ORIGINY) } };
+  return { outline, stack, nets, components, tracks, arcs, vias, pads, fills, regions, sregions, texts, polygons, classes, bodies, models, board: { originX: milVal(boardP.ORIGINX), originY: milVal(boardP.ORIGINY), thickness: boardThickness(boardP) } };
 }

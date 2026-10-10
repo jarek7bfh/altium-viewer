@@ -5,7 +5,7 @@ import { renderSch } from './schrender.js';
 import { renderPcb, PCB_LAYERS } from './pcbrender.js';
 import { Pane } from './pane.js';
 import { hitSch, hitPcb } from './hit.js';
-import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist, scanFolder, resolveProject, importProjectFromFolder, buildPreview, newId } from './store.js';
+import { listProjects, getProject, putProject, deleteProject, deleteAllProjects, projectSize, importFiles, requestPersist, scanFolder, resolveProject, importProjectFromFolder, buildPreview, newId, setSave3D } from './store.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -18,7 +18,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('av.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
 };
 const NS = 'http://www.w3.org/2000/svg';
-export const APP_VERSION = '7';
+export const APP_VERSION = '8';
 
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -48,7 +48,7 @@ async function showHome() {
     const docs = p.docs || Object.values(p.files).map((f) => ({ name: f.name, kind: f.kind }));
     const chips = docs.map((d) => {
       const f = p.files[d.name.toLowerCase()];
-      return f ? `<span class="fchip">${esc(f.name)}<i>${fmtDate(f.lastModified).split(',')[0]}</i></span>` : `<span class="fchip miss" title="Nie wczytano">${esc(d.name)}</span>`;
+      return f ? `<span class="fchip">${esc(f.name)}<i>${fmtDate(f.lastModified).split(',')[0]}${f.meshes ? ' · 3D' : Object.keys(f.streams || {}).some((k) => /^Models\/\d+$/.test(k)) ? ' · STEP' : ''}</i></span>` : `<span class="fchip miss" title="Nie wczytano">${esc(d.name)}</span>`;
     }).join('');
     const el = document.createElement('div');
     el.className = 'card';
@@ -90,6 +90,10 @@ function confirmDelete(title, text, action) {
 const DIR_OK = 'webkitdirectory' in document.createElement('input') && !/iPhone|iPad/.test(navigator.userAgent);
 if (!DIR_OK) { $('#add-dir').classList.add('hidden'); $('#hint-dir').classList.add('hidden'); $('#hint-files').classList.remove('hidden'); $('#add').classList.add('primary'); }
 $('#add').onclick = () => { pickTarget = null; $('#picker').click(); };
+{
+  const o = $('#opt-3d'); const v = LS.get('save3d', true); o.checked = v; setSave3D(v);
+  o.onchange = () => { LS.set('save3d', o.checked); setSave3D(o.checked); };
+}
 let wdTimer = null;
 // The waiting screen is shown BEFORE the system picker opens, so it is already there when Android returns
 // to the page while it is still listing the folder. 'change' or 'cancel' hides it.
@@ -264,6 +268,7 @@ const V = {
   layout: LS.get('layout', 'both'), mode: LS.get('mode', 'comp'), flip: false,
   vis: Object.fromEntries(PCB_LAYERS.map((l) => [l.id, LS.get('layers', {})[l.id] ?? l.on])),
   sel: null, schPane: null, pcbPane: null, pcbR: null, schR: [],
+  is3d: false, v3d: null, useStep: LS.get('useStep', true),
 };
 
 function getter(file) { return (p) => file.streams[p] || null; }
@@ -296,7 +301,7 @@ async function openProj(proj) {
   for (const f of files) {
     try {
       if (f.kind === 'sch') V.schs.push({ name: f.name, data: parseSch(getter(f)) });
-      else V.pcbs.push({ name: f.name, data: parsePcb(getter(f)) });
+      else V.pcbs.push({ name: f.name, data: parsePcb(getter(f)), file: f });
     } catch (e) { console.error(e); errs.push(f.name); }
   }
   // choose pcb: remembered, else the one with most components matching schematic designators
@@ -347,6 +352,8 @@ function buildViews() {
   updateLayersUI();
   buildSearchIndex();
   applySel(null);
+  $('#b3d').classList.toggle('hidden', !pcb);
+  if (V.is3d && pcb) build3D(); else if (!pcb) set3D(false);
 }
 
 function showSheet(si, fit) {
@@ -402,16 +409,111 @@ $('#v-save').onclick = async () => {
   toast('Zapisano „' + p.name + '” na tablecie');
 };
 $('[data-fit=sch]').onclick = () => { const r = V.schR[V.si]; if (r) V.schPane.fitModel(r.bbox, 0.01); };
-$('[data-fit=pcb]').onclick = () => { if (V.pcbR) V.pcbPane.fitModel(V.pcbR.bbox, 0.04); };
+$('[data-fit=pcb]').onclick = () => { if (V.is3d && V.v3d) V.v3d.viewAll(false); else if (V.pcbR) V.pcbPane.fitModel(V.pcbR.bbox, 0.04); };
 $('#flip').onclick = () => setFlip(!V.flip);
 function setFlip(f) {
   V.flip = f;
   $('#flip').classList.toggle('on', f);
   $('#flip span').textContent = f ? 'Bottom' : 'Top';
   drawPcb(false);
+  if (V.is3d && V.v3d) V.v3d.setSide(f);
   applySel(V.sel, 'none');
   updateLayersUI();
 }
+
+// ---------------- 3D ----------------
+let View3DMod = null;
+const hasModelStreams = (f) => f && Object.keys(f.streams || {}).some((k) => /^Models\/\d+$/.test(k));
+function curPcb() { return V.pcbs[V.pcbIdx] || null; }
+function msg3d(text) { const m = $('#p-pcb .v3dmsg'); if (text == null) m.classList.add('hidden'); else { $('span', m).textContent = text; m.classList.remove('hidden'); } }
+function updateStepChip() {
+  const b = $('#bstep'); const e = curPcb();
+  b.classList.toggle('hidden', !V.is3d || !e);
+  if (!e) return;
+  const f = e.file;
+  b.classList.remove('on', 'dim');
+  if (f && f.meshes) { b.querySelector('span').textContent = V.useStep ? 'Modele STEP' : 'Bryły'; b.classList.toggle('on', V.useStep); }
+  else if (hasModelStreams(f)) b.querySelector('span').textContent = 'Wczytaj modele STEP';
+  else { b.querySelector('span').textContent = 'Bez modeli STEP'; b.classList.add('dim'); }
+}
+async function set3D(on) {
+  V.is3d = on;
+  $('#b3d').classList.toggle('on', on);
+  $('#p-pcb').classList.toggle('mode3d', on);
+  updateStepChip();
+  if (on) await build3D();
+}
+async function build3D() {
+  const e = curPcb(); if (!e) return;
+  try {
+    msg3d('Budowanie widoku 3D…');
+    if (!View3DMod) View3DMod = await import('./view3d.js');
+    if (!V.v3d) V.v3d = new View3DMod.View3D($('#p-pcb .v3dhost'), { onPick: on3DPick });
+    const meshes = e.file && e.file.meshes ? new Map(Object.entries(e.file.meshes)) : null;
+    await V.v3d.build(e.data, V.pcbR.groups, meshes, V.useStep);
+    if (V.flip) V.v3d.setSide(true);
+    sync3D(false);
+  } catch (err) {
+    console.error(err);
+    toast('Nie udało się zbudować widoku 3D: ' + (err.message || err), 6000);
+  } finally { msg3d(null); updateStepChip(); }
+}
+function on3DPick(ci) {
+  const pcb = curPcb()?.data; if (!pcb) return;
+  closePops();
+  if (ci == null || ci < 0) applySel(null, '3d'); else applySel({ type: 'comp', des: pcb.components[ci].des }, '3d');
+}
+function sync3D(focus) {
+  if (!V.is3d || !V.v3d) return;
+  const ci = V.sel && V.sel.type === 'comp' ? V.link.pcbCompByDes.get(V.sel.des) : null;
+  V.v3d.select(ci == null ? null : ci, focus);
+}
+async function convertStep() {
+  const e = curPcb(); const f = e && e.file; if (!f) return;
+  const ids = [...new Set(e.data.bodies.filter((b) => b.type === 1 && b.modelId).map((b) => b.modelId))];
+  const byId = new Map(e.data.models.map((m) => [m.id, m]));
+  const jobs = ids.map((id) => ({ id, m: byId.get(id) })).filter((j) => j.m && f.streams['Models/' + j.m.index]);
+  if (!jobs.length) { toast('Brak modeli STEP do konwersji'); return; }
+  let worker;
+  try { worker = new Worker(new URL('js/step-worker.js', document.baseURI)); }
+  catch (err) { await message('Modele STEP niedostępne', '<p>Konwersja modeli STEP działa w zainstalowanej aplikacji (z GitHub Pages).</p>'); return; }
+  const meshes = {}; let fails = 0;
+  const t0 = Date.now();
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      msg3d(`Konwersja modeli 3D: ${i + 1}/${jobs.length} · ${j.m.name}`);
+      const res = await new Promise((resolve) => {
+        const to = setTimeout(() => resolve({ ok: false, error: 'przekroczony czas' }), i === 0 ? 120000 : 60000);
+        worker.onmessage = (ev) => { clearTimeout(to); resolve(ev.data); };
+        worker.onerror = (ev) => { clearTimeout(to); resolve({ ok: false, error: ev.message || 'błąd workera' }); };
+        worker.postMessage({ id: j.id, data: f.streams['Models/' + j.m.index] });
+      });
+      if (res.ok) meshes[j.id] = res.mesh; else { fails++; console.warn('STEP', j.m.name, res.error); }
+      if (i === 0 && !res.ok && /fetch|wasm|WebAssembly|importScripts|Failed/i.test(res.error || '')) throw new Error(res.error);
+    }
+  } catch (err) {
+    worker.terminate(); msg3d(null);
+    await message('Nie udało się uruchomić konwersji', `<p>${esc(err.message || err)}</p><p class="small">Konwersja modeli STEP działa w zainstalowanej aplikacji (z GitHub Pages).</p>`);
+    return;
+  }
+  worker.terminate();
+  if (!Object.keys(meshes).length) { msg3d(null); toast('Nie udało się przekonwertować modeli STEP', 5000); return; }
+  f.meshes = meshes;
+  for (const k of Object.keys(f.streams)) if (/^Models\/\d+$/.test(k)) delete f.streams[k]; // raw STEP no longer needed
+  if (!V.proj.temp && V.proj.id) { try { await putProject(V.proj); projects = await listProjects(); } catch (err) { console.warn(err); } }
+  V.useStep = true; LS.set('useStep', true);
+  msg3d(null);
+  toast(`Przekonwertowano ${Object.keys(meshes).length} modeli w ${Math.round((Date.now() - t0) / 1000)} s${fails ? ` (${fails} nieudanych – pokazane jako bryły)` : ''}`, 5000);
+  await build3D();
+}
+$('#b3d').onclick = () => set3D(!V.is3d);
+$('#bstep').onclick = async () => {
+  const f = curPcb()?.file;
+  if (f && f.meshes) { V.useStep = !V.useStep; LS.set('useStep', V.useStep); await build3D(); return; }
+  if (hasModelStreams(f)) { await convertStep(); return; }
+  await message('Brak modeli STEP', '<p>Ten plik PCB został zapisany na tablecie bez modeli 3D. Widok pokazuje uproszczone bryły elementów.</p><p>Aby dodać modele: włącz na ekranie głównym „Zapisuj modele 3D (STEP)” i zaktualizuj projekt przyciskiem ⟳.</p>');
+};
 
 // ---------------- selection ----------------
 // sel: {type:'comp', des} | {type:'net', sch:Set<int>, pcb:int}
@@ -459,6 +561,7 @@ function applySel(sel, origin = 'none') {
     if (sb && origin !== 'sch' && $('#panes').dataset.layout !== 'pcb') V.schPane.reveal(sb, 420);
     if (pb && origin !== 'pcb' && $('#panes').dataset.layout !== 'sch') V.pcbPane.reveal(pb, 900);
   }
+  sync3D(!!sel && origin !== '3d');
   renderInfo(sel);
 }
 
@@ -614,7 +717,7 @@ function renderInfo(sel) {
   $$('[data-pn]', body).forEach((b) => (b.onclick = () => applySel(pcbNetSel(+b.dataset.pn), 'none')));
   $$('[data-des]', body).forEach((b) => (b.onclick = () => applySel({ type: 'comp', des: b.dataset.des }, 'none')));
 }
-$('#i-close').onclick = () => applySel(null);
+$('#info-close').onclick = () => applySel(null);
 const toggleInfo = () => { INFO_COLLAPSED = !INFO_COLLAPSED; $('#info').classList.toggle('collapsed', INFO_COLLAPSED); };
 $('#i-collapse').onclick = toggleInfo;
 $('.ititle').onclick = toggleInfo;
